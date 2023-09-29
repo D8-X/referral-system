@@ -1,0 +1,5 @@
+{
+    "paymentMaxLookBackDays": 14,
+    "paymentScheduleMinHourDayofmonthWeekday": "0-14-*-*",
+    "multiPayContractAddr": "0xfCBE2f332b1249cDE226DFFE8b2435162426AfE5"
+}

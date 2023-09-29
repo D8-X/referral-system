@@ -1,8 +1,8 @@
 package svc
 
 import (
-	"database/sql"
 	"fmt"
+	"log"
 	"log/slog"
 	"referral-system/env"
 	"referral-system/src/utils"
@@ -12,64 +12,52 @@ import (
 )
 
 func Run() {
-	err := loadEnv()
+	v, err := loadEnv()
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
 	}
-	db, err := connectDB()
+	if err != nil {
+		// Handle the error
+		log.Fatal(err)
+	}
+
+	var app utils.App
+	err = app.New(v)
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
 	}
-	var structure []utils.DbReferralStruct
-	var row utils.DbReferralStruct
-
-	rows, err := db.Query("SELECT * FROM referral_struct")
-	defer rows.Close()
+	err = app.DbGetMarginTkn()
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("Error:" + err.Error())
 		return
 	}
-	for rows.Next() {
-		rows.Scan(&row.Parent, &row.Child, &row.PassOn, &row.CreatedOn)
-		structure = append(structure, row)
-		fmt.Println(row)
-	}
+	app.DbGetReferralChainOfChild("0x9d5aaB428e98678d0E645ea4AeBd25f744341a05")
+	//https://github.com/gitploy-io/cronexpr
 }
 
-func connectDB() (*sql.DB, error) {
-	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
-	// Connect to database
-	// From documentation: "The returned DB is safe for concurrent use by multiple goroutines and
-	// maintains its own pool of idle connections. Thus, the Open function should be called just once.
-	// It is rarely necessary to close a DB."
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
-func loadEnv() error {
-	viper.SetConfigFile(".env")
-	if err := viper.ReadInConfig(); err != nil {
+func loadEnv() (*viper.Viper, error) {
+	v := viper.New()
+	v.SetConfigFile(".env")
+	if err := v.ReadInConfig(); err != nil {
 		slog.Error("could not load .env file" + err.Error())
 	}
 
-	viper.AutomaticEnv()
+	v.AutomaticEnv()
 
-	viper.SetDefault(env.DATABASE_DSN_HISTORY, "postgres://postgres:postgres@localhost:5432/referral")
+	v.SetDefault(env.DATABASE_DSN_HISTORY, "postgres://postgres:postgres@localhost:5432/referral")
 
 	requiredEnvs := []string{
 		env.DATABASE_DSN_HISTORY,
+		env.CONFIG_PATH,
 	}
 
 	for _, e := range requiredEnvs {
-		if !viper.IsSet(e) {
-			return fmt.Errorf("required environment variable not set %s", e)
+		if !v.IsSet(e) {
+			return nil, fmt.Errorf("required environment variable not set %s", e)
 		}
 	}
 
-	return nil
+	return v, nil
 }

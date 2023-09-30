@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"referral-system/env"
+	"referral-system/src/contracts"
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/viper"
 )
 
@@ -18,6 +22,8 @@ type App struct {
 	MarginTokenInfo []DbMarginTokenInfo
 	Settings        Settings
 	Rpc             []string
+	RpcClient       *ethclient.Client
+	MultipayCtrct   *contracts.MultiPay
 }
 
 type Settings struct {
@@ -60,6 +66,16 @@ type DbMarginTokenInfo struct {
 	TokenDecimals int8
 }
 
+type PaymentLog struct {
+	BatchTimestamp int
+	Code           string
+	PoolId         uint32
+	TokenAddr      string
+	BrokerAddr     string
+	PayeeAddr      []common.Address
+	AmountDecN     []*big.Int
+}
+
 func (a *App) New(viper *viper.Viper) error {
 	// connect db
 	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
@@ -83,6 +99,15 @@ func (a *App) New(viper *viper.Viper) error {
 		return err
 	}
 	a.Rpc = rpcs
+
+	err = a.CreateRpcClient()
+	if err != nil {
+		return err
+	}
+	err = a.CreateMultipayInstance()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

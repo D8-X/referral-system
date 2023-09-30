@@ -1,4 +1,4 @@
-package utils
+package referral
 
 import (
 	"database/sql"

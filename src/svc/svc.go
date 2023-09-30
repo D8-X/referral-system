@@ -5,7 +5,7 @@ import (
 	"log"
 	"log/slog"
 	"referral-system/env"
-	"referral-system/src/utils"
+	"referral-system/src/referral"
 
 	_ "github.com/lib/pq"
 	"github.com/spf13/viper"
@@ -22,13 +22,13 @@ func Run() {
 		log.Fatal(err)
 	}
 
-	var app utils.App
+	var app referral.App
 	err = app.New(v)
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
 	}
-	utils.FilterPayments(app.MultipayCtrct)
+	referral.FilterPayments(app.MultipayCtrct)
 	err = app.DbGetMarginTkn()
 	if err != nil {
 		slog.Error("Error:" + err.Error())

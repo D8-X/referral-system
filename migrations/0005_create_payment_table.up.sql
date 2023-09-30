@@ -12,7 +12,8 @@ CREATE TABLE if not exists "referral_payment" (
     -- payment in token's number format, single transaction
     "paid_amount_cc" DECIMAL(40,0) NOT NULL,
     "tx_hash" TEXT NOT NULL,
-    "block_nr" DECIMAL(40,0),
+    "block_nr" BIGINT,
+    "block_ts" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "tx_confirmed" BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT "referral_payment_pkey" PRIMARY KEY ("trader_addr", "payee_addr", "pool_id","batch_ts")
 );

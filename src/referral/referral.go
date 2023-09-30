@@ -74,6 +74,7 @@ type PaymentLog struct {
 	BrokerAddr     string
 	TxHash         string
 	BlockNumber    uint64
+	BlockTs        uint64
 	PayeeAddr      []common.Address
 	AmountDecN     []*big.Int
 }
@@ -86,6 +87,7 @@ type DbPayment struct {
 	BatchTs      time.Time
 	PaidAmountCC string
 	TxHash       string
+	BlockTs      time.Time
 	TxConfirmed  bool
 }
 
@@ -238,7 +240,7 @@ func (a *App) DbGetMarginTkn() error {
 // SavePayments gets the payment events from on-chain and
 // updates or inserts database entries
 func (a *App) SavePayments() error {
-	payments, err := FilterPayments(a.MultipayCtrct)
+	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient)
 	if err != nil {
 		return err
 	}
@@ -263,16 +265,17 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	if a.Db == nil {
 		return errors.New("Db not initialized")
 	}
-	utcTime := time.Unix(int64(p.BatchTimestamp), 0)
+	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
+	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
 	query := "SELECT tx_confirmed FROM referral_payment " +
 		"WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3"
 	var isConfirmed bool
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcTime).Scan(&isConfirmed)
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime).Scan(&isConfirmed)
 	if err == sql.ErrNoRows {
 		// insert
-		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, tx_confirmed)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, p.PoolId, utcTime, p.AmountDecN[payIdx].String(), p.TxHash, p.BlockNumber, true)
+		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, block_ts, tx_confirmed)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, p.PoolId, utcBatchTime, p.AmountDecN[payIdx].String(), p.TxHash, p.BlockNumber, utcBlockTime, true)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
@@ -282,7 +285,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		// set tx confirmed to true
 		query = `UPDATE referral_payment SET tx_confirmed = true
 				WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcTime)
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}

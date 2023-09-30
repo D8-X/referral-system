@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"os"
 	"referral-system/env"
@@ -236,9 +235,9 @@ func (a *App) DbGetMarginTkn() error {
 	return nil
 }
 
-// StorePayments gets the payment events from on-chain and
+// SavePayments gets the payment events from on-chain and
 // updates or inserts database entries
-func (a *App) StorePayments() error {
+func (a *App) SavePayments() error {
 	payments, err := FilterPayments(a.MultipayCtrct)
 	if err != nil {
 		return err
@@ -250,36 +249,43 @@ func (a *App) StorePayments() error {
 			if p.AmountDecN[k].BitLen() == 0 {
 				continue
 			}
-			a.writeDbPayment(traderAddr, payee.String(), p)
+			a.writeDbPayment(traderAddr, payee.String(), p, k)
 		}
 
 	}
 	return nil
 }
 
-func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog) error {
+// writeDbPayment writes data from multiplay contract into the database
+// if there is already an entry for a given record which is not confirmed, it sets the confirmed flag to true
+// db keys are trader_addr, payee_addr, pool_id and batch_ts
+func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, payIdx int) error {
 	if a.Db == nil {
 		return errors.New("Db not initialized")
 	}
 	utcTime := time.Unix(int64(p.BatchTimestamp), 0)
-	query := `SELECT tx_confirmed FROM referral_payment
-			  WHERE trader_addr = ? AND payee_addr = ? AND batch_ts = ?`
-	var row DbPayment
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcTime).Scan(&row)
+	query := "SELECT tx_confirmed FROM referral_payment " +
+		"WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3"
+	var isConfirmed bool
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcTime).Scan(&isConfirmed)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, tx_confirmed)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, p.PoolId, utcTime, p.TxHash, p.BlockNumber, true)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, p.PoolId, utcTime, p.AmountDecN[payIdx].String(), p.TxHash, p.BlockNumber, true)
 		if err != nil {
-			log.Fatalf("Failed to insert data: %v", err)
+			return errors.New("Failed to insert data: " + err.Error())
 		}
-
 	} else if err != nil {
 		return err
-	} else {
+	} else if isConfirmed == false {
 		// set tx confirmed to true
-
+		query = `UPDATE referral_payment SET tx_confirmed = true
+				WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcTime)
+		if err != nil {
+			return errors.New("Failed to insert data: " + err.Error())
+		}
 	}
 	return nil
 }

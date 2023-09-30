@@ -28,7 +28,7 @@ func Run() {
 		slog.Error("Error:" + err.Error())
 		return
 	}
-	referral.FilterPayments(app.MultipayCtrct)
+	app.SavePayments()
 	err = app.DbGetMarginTkn()
 	if err != nil {
 		slog.Error("Error:" + err.Error())

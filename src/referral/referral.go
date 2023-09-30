@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"os"
 	"referral-system/env"
@@ -72,8 +73,21 @@ type PaymentLog struct {
 	PoolId         uint32
 	TokenAddr      string
 	BrokerAddr     string
+	TxHash         string
+	BlockNumber    uint64
 	PayeeAddr      []common.Address
 	AmountDecN     []*big.Int
+}
+
+type DbPayment struct {
+	TraderAddr   string
+	PayeeAddr    string
+	Code         string
+	PoolId       int
+	BatchTs      time.Time
+	PaidAmountCC string
+	TxHash       string
+	TxConfirmed  bool
 }
 
 func (a *App) New(viper *viper.Viper) error {
@@ -218,6 +232,54 @@ func (a *App) DbGetMarginTkn() error {
 		rows.Scan(&row.PoolId, &row.TokenAddr, &row.TokenName, &row.TokenDecimals)
 		a.MarginTokenInfo = append(a.MarginTokenInfo, row)
 		fmt.Println(row)
+	}
+	return nil
+}
+
+// StorePayments gets the payment events from on-chain and
+// updates or inserts database entries
+func (a *App) StorePayments() error {
+	payments, err := FilterPayments(a.MultipayCtrct)
+	if err != nil {
+		return err
+	}
+	for _, p := range payments {
+		// key = trader_addr, payee_addr, pool_id, batch_timestamp
+		traderAddr := p.PayeeAddr[0].String()
+		for k, payee := range p.PayeeAddr {
+			if p.AmountDecN[k].BitLen() == 0 {
+				continue
+			}
+			a.writeDbPayment(traderAddr, payee.String(), p)
+		}
+
+	}
+	return nil
+}
+
+func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog) error {
+	if a.Db == nil {
+		return errors.New("Db not initialized")
+	}
+	utcTime := time.Unix(int64(p.BatchTimestamp), 0)
+	query := `SELECT tx_confirmed FROM referral_payment
+			  WHERE trader_addr = ? AND payee_addr = ? AND batch_ts = ?`
+	var row DbPayment
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcTime).Scan(&row)
+	if err == sql.ErrNoRows {
+		// insert
+		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, tx_confirmed)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, p.PoolId, utcTime, p.TxHash, p.BlockNumber, true)
+		if err != nil {
+			log.Fatalf("Failed to insert data: %v", err)
+		}
+
+	} else if err != nil {
+		return err
+	} else {
+		// set tx confirmed to true
+
 	}
 	return nil
 }

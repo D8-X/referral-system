@@ -56,7 +56,7 @@ func (a *App) CreateMultipayInstance() error {
 	return nil
 }
 
-func FilterPayments(ctrct *contracts.MultiPay) error {
+func FilterPayments(ctrct *contracts.MultiPay) ([]PaymentLog, error) {
 	// Create an event iterator for the MultiPayPayment events
 	opts := &bind.FilterOpts{
 		Start:   0,   // Starting block number
@@ -65,7 +65,7 @@ func FilterPayments(ctrct *contracts.MultiPay) error {
 	}
 	multiPayPaymentIterator, err := ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
 	if err != nil {
-		return errors.New("Failed to create event iterator: " + err.Error())
+		return []PaymentLog{}, errors.New("Failed to create event iterator: " + err.Error())
 	}
 	// Iterate through the events and gather paymentlog:
 	/*
@@ -78,6 +78,7 @@ func FilterPayments(ctrct *contracts.MultiPay) error {
 			PayeeAddr      []string
 			AmountDecN     []string
 	*/
+	var logs []PaymentLog
 	for {
 		if !multiPayPaymentIterator.Next() {
 			break // No more events to process
@@ -104,9 +105,13 @@ func FilterPayments(ctrct *contracts.MultiPay) error {
 		log.PoolId = uint32(id)
 		log.Code = s[1]
 		log.BrokerAddr = event.From.String()
+		//Trader must be the first address
 		log.PayeeAddr = event.Payees
 		log.AmountDecN = event.Amounts
+		log.TxHash = event.Raw.TxHash.String()
+		log.BlockNumber = multiPayPaymentIterator.Event.Raw.BlockNumber
 		slog.Info("Event Data for code " + log.Code)
+		logs = append(logs, log)
 	}
-	return nil
+	return logs, nil
 }

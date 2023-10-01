@@ -10,6 +10,7 @@ import (
 	"referral-system/env"
 	"referral-system/src/contracts"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -323,4 +324,20 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		}
 	}
 	return nil
+}
+
+// HasLoopOnChainAddition returns true if when adding the new child to the
+// referral chain, there would be a loop
+func (a *App) HasLoopOnChainAddition(parent string, newChild string) (bool, error) {
+	chain, err := a.DbGetReferralChainOfChild(parent)
+	if err != nil {
+		return true, err
+	}
+	newChild = strings.ToLower(newChild)
+	for _, el := range chain {
+		if strings.ToLower(el.Parent) == newChild || strings.ToLower(el.Child) == newChild {
+			return true, nil
+		}
+	}
+	return false, nil
 }

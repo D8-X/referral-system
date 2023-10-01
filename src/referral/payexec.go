@@ -17,6 +17,7 @@ import (
 type PayExec interface {
 	// assign private key and remote broker address
 	Init(viper *viper.Viper) error
+	GetBrokerAddr() common.Address
 	//ExecutePayment(p PaymentExecution) error
 }
 
@@ -32,6 +33,10 @@ type RemotePayExec struct {
 
 type LocalPayExec struct {
 	basePayExec
+}
+
+func (exc *basePayExec) GetBrokerAddr() common.Address {
+	return exc.BrokerAddr
 }
 
 func (exc *RemotePayExec) Init(viper *viper.Viper) error {

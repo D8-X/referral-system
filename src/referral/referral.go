@@ -186,8 +186,19 @@ func (a *App) SettingsToDB() error {
 	INSERT INTO referral_settings (property, value)
 	VALUES ($1, $2)
 	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
-	_, err := a.Db.Exec(query, "paymentMaxLookBackDays", a.Settings.PaymentMaxLookBackDays)
+	_, err := a.Db.Exec(query, "payment_max_lookback_days", a.Settings.PaymentMaxLookBackDays)
 
+	if err != nil {
+		return err
+	}
+
+	// broker address
+	addr := a.PaymentExecutor.GetBrokerAddr().String()
+	query = `
+	INSERT INTO referral_settings (property, value)
+	VALUES ($1, $2)
+	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
+	_, err = a.Db.Exec(query, "broker_addr", addr)
 	if err != nil {
 		return err
 	}

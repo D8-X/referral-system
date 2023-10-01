@@ -23,6 +23,9 @@ func Run() {
 	}
 
 	var app referral.App
+	s := v.GetString(env.REMOTE_BROKER_HTTP)
+	fmt.Print(s)
+
 	err = app.New(v)
 	if err != nil {
 		slog.Error("Error:" + err.Error())
@@ -52,6 +55,7 @@ func loadEnv() (*viper.Viper, error) {
 	requiredEnvs := []string{
 		env.DATABASE_DSN_HISTORY,
 		env.CONFIG_PATH,
+		env.BROKER_KEY,
 	}
 
 	for _, e := range requiredEnvs {

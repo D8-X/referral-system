@@ -5,6 +5,7 @@ import (
 	"log"
 	"log/slog"
 	"referral-system/env"
+	"referral-system/src/api"
 	"referral-system/src/referral"
 
 	_ "github.com/lib/pq"
@@ -37,6 +38,7 @@ func Run() {
 		slog.Error("Error:" + err.Error())
 		return
 	}
+	api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT))
 	//app.DbGetReferralChainOfChild("0x9d5aaB428e98678d0E645ea4AeBd25f744341a05")
 	//https://github.com/gitploy-io/cronexpr
 }
@@ -56,6 +58,8 @@ func loadEnv() (*viper.Viper, error) {
 		env.DATABASE_DSN_HISTORY,
 		env.CONFIG_PATH,
 		env.BROKER_KEY,
+		env.API_BIND_ADDR,
+		env.API_PORT,
 	}
 
 	for _, e := range requiredEnvs {

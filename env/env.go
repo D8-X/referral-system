@@ -9,4 +9,6 @@ const (
 	RPC_URL_PATH         = "RPC_URL_PATH"
 	REMOTE_BROKER_HTTP   = "REMOTE_BROKER_HTTP"
 	BROKER_KEY           = "BROKER_KEY"
+	API_PORT             = "API_PORT"
+	API_BIND_ADDR        = "API_BIND_ADDR"
 )

@@ -5,6 +5,7 @@ go 1.21.1
 require (
 	github.com/ethereum/go-ethereum v1.13.2
 	github.com/lib/pq v1.10.9
+	github.com/miguelmota/go-solidity-sha3 v0.1.1
 	github.com/spf13/viper v1.16.0
 )
 
@@ -20,6 +21,8 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/ethereum/c-kzg-4844 v0.3.1 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/go-chi/chi/v5 v5.0.10 // indirect
+	github.com/go-chi/cors v1.2.1 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -27,7 +30,6 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/holiman/uint256 v1.2.3 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
-	github.com/miguelmota/go-solidity-sha3 v0.1.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect

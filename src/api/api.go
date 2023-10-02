@@ -1,25 +1,43 @@
 package api
 
-type APICodeSelectionPayload struct {
-	Code       string `json:"code"`
-	TraderAddr string `json:"traderAddr"`
-	CreatedOn  uint32 `json:"createdOn"`
-	Signature  string `json:"signature"`
+import (
+	"encoding/json"
+	"errors"
+	"net"
+	"net/http"
+	"referral-system/src/referral"
+
+	"github.com/go-chi/chi/v5"
+	"golang.org/x/exp/slog"
+)
+
+func StartApiServer(app *referral.App, host string, port string) error {
+	router := chi.NewRouter()
+	RegisterGlobalMiddleware(router)
+	RegisterRoutes(router, app)
+
+	addr := net.JoinHostPort(
+		host,
+		port,
+	)
+	slog.Info("starting api server host_port " + addr)
+	err := http.ListenAndServe(
+		addr,
+		router,
+	)
+	return errors.New("api server is shutting down" + err.Error())
 }
 
-type APICodePayload struct {
-	Code          string `json:"code"`
-	ReferrerAddr  string `json:"referrerAddr"`
-	AgencyAddr    string `json:"agencyAddr"`
-	CreatedOn     uint32 `json:"createdOn"`
-	PassOnPercTDF uint32 `json:"passOnPercTDF"`
-	Signature     string `json:"signature"`
-}
-
-type APIReferPayload struct {
-	ParentAddr    string `json:"parentAddr"`
-	ReferToAddr   string `json:"referToAddr"`
-	PassOnPercTDF uint32 `json:"passOnPercTDF"`
-	CreatedOn     uint32 `json:"createdOn"`
-	Signature     string `json:"signature"`
+func formatError(errorMsg string) []byte {
+	response := struct {
+		Error string `json:"error"`
+	}{
+		Error: errorMsg,
+	}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		return []byte(err.Error())
+	}
+	return jsonResponse
 }

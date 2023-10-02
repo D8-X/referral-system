@@ -1,7 +1,35 @@
 # referral-system
 Referral system
 
+# Todos
+
+- walk back in time block-time
+
 # API
+
+# Select a referral code as a trader
+```
+ {
+      "code": "THUANBX",
+      "traderAddr": "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
+      "createdOn": 1696264745,
+      "signature": "0x4712cd2d1b772442afe1ea7f4c2a1f0cb8cc1bbc320a9bb449edd29f71e20ddd25b81daeb5a026f0d5e8361fe3739a365590ca9a6f416807ece8dd0ee3fd0a0e1b"
+}
+```
+Success:
+```
+{
+    "type": "select-code",
+    "data": {
+        "code": DOUBLE_AG
+    }
+}
+```
+Error:
+`{"error":"code selection failed:Code already selected"}`
+`{"error":"code selection failed:Failed"}``
+# Notes
+
 
 ## ok: Earned rebate
 `earned-rebate?referrerAddr=0x...|traderAddr=0x...|agencyAddr=0x...`

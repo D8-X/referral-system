@@ -2,14 +2,16 @@ package api
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	solsha3 "github.com/miguelmota/go-solidity-sha3"
 )
@@ -36,37 +38,38 @@ func BytesFromHexString(hexNumber string) ([]byte, error) {
 	return data, nil
 }
 
-func RecoverCodeSelectSignatureAddr(sig []byte, ps APIReferralCodeSelectionPayload) (common.Address, error) {
+func RecoverCodeSelectSigAddr(ps APIReferralCodeSelectionPayload) (common.Address, error) {
 	digestBytes32, err := GetCodeSelectionDigest(ps)
 	if err != nil {
 		return common.Address{}, err
 	}
-
-	addr, err := RecoverEvmAddress(digestBytes32[:], sig[:])
+	addr, err := RecoverEvmAddress(string(digestBytes32[:]), ps.Signature)
 	if err != nil {
 		return common.Address{}, err
 	}
 	return addr, nil
 }
 
-func RecoverEvmAddress(data, signature []byte) (common.Address, error) {
-	recoveryID := signature[len(signature)-1]
-	if recoveryID != 27 && recoveryID != 28 {
-		return common.Address{}, fmt.Errorf("invalid recovery id")
-	}
-	s, _ := accounts.TextAndHash(data)
-	adjustedSignature := append(signature[:len(signature)-1], recoveryID-27)
+func RecoverEvmAddress(data string, signature string) (common.Address, error) {
+	// Hash the unsigned message using EIP-191
+	hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(data)) + data)
+	hash := crypto.Keccak256Hash(hashedMessage)
 
-	// Recover public key from encoded digest and signature
-	publicKey, err := crypto.SigToPub(s, adjustedSignature)
+	decodedMessage := hexutil.MustDecode(signature)
+	// Handles cases where EIP-115 is not implemented (most wallets don't implement it)
+	if decodedMessage[64] == 27 || decodedMessage[64] == 28 {
+		decodedMessage[64] -= 27
+	}
+	// Recover a public key from the signed message
+	sigPublicKeyECDSA, err := crypto.SigToPub(hash.Bytes(), decodedMessage)
+	if sigPublicKeyECDSA == nil {
+		err = errors.New("Could not get a public get from the message signature")
+	}
 	if err != nil {
 		return common.Address{}, err
 	}
-
-	// Get Ethereum address from the public key
-	recoveredAddress := crypto.PubkeyToAddress(*publicKey)
-
-	return recoveredAddress, nil
+	addr := crypto.PubkeyToAddress(*sigPublicKeyECDSA)
+	return addr, nil
 }
 
 func WashCode(rawCode string) string {

@@ -19,7 +19,7 @@ type APICodePayload struct {
 type APIReferPayload struct {
 	ParentAddr    string `json:"parentAddr"`
 	ReferToAddr   string `json:"referToAddr"`
-	PassOnPercTDF uint32 `json:"passOnPercent"`
+	PassOnPercTDF uint32 `json:"passOnPercTDF"`
 	CreatedOn     uint32 `json:"createdOn"`
 	Signature     string `json:"signature"`
 }

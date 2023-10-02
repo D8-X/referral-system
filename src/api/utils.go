@@ -33,8 +33,9 @@ func GetCodeSelectionDigest(rc APICodeSelectionPayload) ([32]byte, error) {
 func GetReferralDigest(rpl APIReferPayload) ([32]byte, error) {
 	types := []string{"address", "address", "uint32", "uint256"}
 	addr := common.HexToAddress(rpl.ReferToAddr)
+	addrP := common.HexToAddress(rpl.ParentAddr)
 	ts := big.NewInt(int64(rpl.CreatedOn))
-	values := []interface{}{addr, rpl.PassOnPercTDF, ts}
+	values := []interface{}{addrP, addr, rpl.PassOnPercTDF, ts}
 	digest0, err := abiEncodeBytes32(types, values...)
 	if err != nil {
 		return [32]byte{}, err

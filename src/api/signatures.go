@@ -67,11 +67,10 @@ func GetReferralDigest(rpl utils.APIReferPayload) ([32]byte, error) {
 }
 
 func GetCodeDigest(rpl utils.APICodePayload) ([32]byte, error) {
-	types := []string{"string", "address", "address", "uint32", "uint256"}
-	addrR := common.HexToAddress(rpl.ReferrerAddr)
-	addrA := common.HexToAddress(rpl.AgencyAddr) // can be 0
+	types := []string{"string", "address", "uint32", "uint256"}
+	addrA := common.HexToAddress(rpl.ReferrerAddr) // can be 0
 	ts := big.NewInt(int64(rpl.CreatedOn))
-	values := []interface{}{rpl.Code, addrR, addrA, rpl.PassOnPercTDF, ts}
+	values := []interface{}{rpl.Code, addrA, rpl.PassOnPercTDF, ts}
 	digest0, err := abiEncodeBytes32(types, values...)
 	if err != nil {
 		return [32]byte{}, err

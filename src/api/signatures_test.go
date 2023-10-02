@@ -48,7 +48,6 @@ func TestNewCodeDigest(t *testing.T) {
 	var rc = utils.APICodePayload{
 		Code:          "ABCD",
 		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
-		AgencyAddr:    "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
 		CreatedOn:     1696166434,
 		PassOnPercTDF: 225,
 		Signature:     ""}
@@ -58,7 +57,7 @@ func TestNewCodeDigest(t *testing.T) {
 		return
 	}
 	digestHex := fmt.Sprintf("%x", d)
-	if digestHex != "2ed027b173ffdfdc4d0e0e0d98e258d538cfdb0016e02b0b1c65ee8b1570c1c2" {
+	if digestHex != "61a01769ac972fff3f8b608e5ce62b2d9557306b2680ec2c8bcf4194ab7d6a87" {
 		t.Errorf("failed")
 		return
 	}
@@ -67,17 +66,16 @@ func TestRecoverAddrNewCode(t *testing.T) {
 	var rc = utils.APICodePayload{
 		Code:          "ABCD",
 		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
-		AgencyAddr:    "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
 		CreatedOn:     1696166434,
 		PassOnPercTDF: 225,
-		Signature:     "0x11fd0995864812c3c8f55ddf15a04511213b99f5376e288d94a7aa2e903793e33abaeb6132621880cf1177bb3909c99625cfd1669d6f366597bbd63fa67671a81b"}
+		Signature:     "0xb11b9af69b85719093be154bd9a9a23792d1ecb64f70b34dd69fdbec6c7cdf7048d62c6a6d94ee9f65e78aafad2ea45d94765e285a18485b879f814fde17c6b01b"}
 	d, err := RecoverCodeSigAddr(rc)
 	if err != nil {
 		t.Errorf("recover failed order: %v", err)
 		return
 	}
-	digestHex := fmt.Sprintf("%x", d)
-	if digestHex != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
+	addr := fmt.Sprintf("%x", d)
+	if addr != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
 		t.Errorf("failed")
 		return
 	}

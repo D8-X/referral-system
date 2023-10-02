@@ -10,7 +10,6 @@ type APICodeSelectionPayload struct {
 type APICodePayload struct {
 	Code          string `json:"code"`
 	ReferrerAddr  string `json:"referrerAddr"`
-	AgencyAddr    string `json:"agencyAddr"`
 	CreatedOn     uint32 `json:"createdOn"`
 	PassOnPercTDF uint32 `json:"passOnPercTDF"`
 	Signature     string `json:"signature"`

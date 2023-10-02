@@ -222,16 +222,17 @@ func (a *App) ConnectDB(connStr string) error {
 }
 
 func (a *App) DbGetReferralChainOfChild(child string) ([]DbReferralChainOfChild, error) {
+	child = strings.ToLower(child)
 	var row DbReferralChainOfChild
 	var chain []DbReferralChainOfChild
 	query := "WITH RECURSIVE child_to_root AS (" +
 		"SELECT child, parent, pass_on, 1 AS lvl " +
 		"FROM referral_chain " +
-		"WHERE child = '" + child + "' " +
+		"WHERE lower(child) = '" + child + "' " +
 		"UNION ALL " +
 		"SELECT c.child, c.parent, c.pass_on, cr.lvl + 1 " +
 		"FROM referral_chain c " +
-		"INNER JOIN child_to_root cr ON cr.parent = c.child " +
+		"INNER JOIN child_to_root cr ON lower(cr.parent) = lower(c.child)" +
 		") " +
 		"SELECT parent, child, pass_on, lvl " +
 		"FROM child_to_root " +
@@ -444,6 +445,42 @@ func (a *App) UpsertCode(csp utils.APICodePayload) error {
 	_, err = a.Db.Exec(query, passOn, csp.Code)
 	if err != nil {
 		return errors.New("Failed to insert data: " + err.Error())
+	}
+	return nil
+}
+
+func (a *App) Refer(rpl utils.APIReferPayload) error {
+	var passOn float32 = float32(rpl.PassOnPercTDF) / 100.0
+	rpl.ParentAddr = strings.ToLower(rpl.ParentAddr)
+	// parent can only refer if they are the broker or a child
+	query := `SELECT child from referral_chain WHERE LOWER(child)=$1
+		UNION SELECT value as child from referral_setting WHERE property="broker_addr" AND LOWER(value)=$1`
+	var addr string
+	err := a.Db.QueryRow(query, rpl.ParentAddr).Scan(&addr)
+	if err == sql.ErrNoRows {
+		return errors.New("Not an agency")
+	}
+	rpl.ReferToAddr = strings.ToLower(rpl.ReferToAddr)
+	h, err := a.HasLoopOnChainAddition(rpl.ParentAddr, rpl.ReferToAddr)
+	if err != nil {
+		slog.Error("HasLoopOnChainAddition failed")
+		return errors.New("Failed")
+	}
+	if h {
+		return errors.New("Referral already in chain")
+	}
+	query = "SELECT child from referral_chain WHERE LOWER(child)=$1"
+	err = a.Db.QueryRow(query, rpl.ReferToAddr).Scan(&addr)
+	if err != sql.ErrNoRows {
+		return errors.New("Refer to addr already in use")
+	}
+	// now safe to insert
+	query = `INSERT INTO referral_chain (parent, child, pass_on)
+          	 VALUES ($1, $2, $3)`
+	_, err = a.Db.Exec(query, rpl.ParentAddr, rpl.ReferToAddr, passOn)
+	if err != nil {
+		slog.Error("Failed to insert referral" + err.Error())
+		return errors.New("Failed to insert referral")
 	}
 	return nil
 }

@@ -58,6 +58,34 @@ Error:
 ```
 {"error":"code upsert failed:Not code owner"}
 ```
+
+## Refer
+/refer
+
+```
+{
+    "parentAddr": "0x5A09217F6D36E73eE5495b430e889f8c57876Ef3",
+    "referToAddr": "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
+    "passOnPercTDF": 225,
+    "createdOn": 1696166434,
+    "signature": "0x09bbe815eba739e28c665c6637e7e45dca03eed00d0eaffb1890713c8b3f9e760d41102d5d6885724bd53c7fc0bedcce8dfebe020464c234c1c1d4d194090f071c"
+}
+```
+Success:
+```
+{
+    "type": "referral-code",
+    "data": {
+        "referToAddr": "0x863ad9ce46acf07fd9390147b619893461036194"
+    }
+}
+```
+Error:
+only one occurrence as child allowed:
+`{"error":"referral failed:Refer to addr already in use"}`
+`{"error":"referral failed:Not an agency"}`
+
+
 # Notes
 
 

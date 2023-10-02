@@ -70,7 +70,68 @@ func onSelectCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	w.Write([]byte(jsonResponse))
 }
 
-func onRefer(w http.ResponseWriter, r *http.Request) {
+func onRefer(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	// Read the JSON data from the request body
+	var jsonData []byte
+	if r.Body != nil {
+		defer r.Body.Close()
+		jsonData, _ = io.ReadAll(r.Body)
+	}
+	var req utils.APIReferPayload
+	err := json.Unmarshal(jsonData, &req)
+	if err != nil {
+		errMsg := `Wrong argument types. Usage:
+		{
+			'parentAddr': '0x..',
+			'referToAddr': '0x..',
+			'passOnPercTDF': 500,
+			'createdOn': 1696166434,
+			'signature': '0x...'
+		}`
+		errMsg = strings.ReplaceAll(errMsg, "\t", "")
+		errMsg = strings.ReplaceAll(errMsg, "\n", "")
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	if !isValidEvmAddr(req.ParentAddr) || !isValidEvmAddr(req.ReferToAddr) {
+		errMsg := `invalid address`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	if false && !isCurrentTimestamp(req.CreatedOn) {
+		errMsg := `timestamp not current`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	if req.PassOnPercTDF >= 10000 {
+		errMsg := `pass on percentage invalid`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	addr, err := RecoverReferralSigAddr(req)
+	if err != nil {
+		slog.Info("Recovering referral signature failed:" + err.Error())
+		errMsg := `referral signature recovery failed`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	if strings.ToLower(addr.String()) != strings.ToLower(req.ParentAddr) {
+		errMsg := `code selection signature wrong`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	// now hand over to db
+	err = app.Refer(req)
+	if err != nil {
+		errMsg := `referral failed:` + err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	jsonResponse := `{"type":"referral-code", "data":{"referToAddr": "` + req.ReferToAddr + `"}}`
+	w.Write([]byte(jsonResponse))
 
 }
 
@@ -103,7 +164,7 @@ func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
-	if false && !isCurrentTimestamp(req.CreatedOn) {
+	if !isCurrentTimestamp(req.CreatedOn) {
 		errMsg := `timestamp not current`
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return

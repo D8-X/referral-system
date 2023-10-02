@@ -24,7 +24,7 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 	})
 
 	router.Post("/refer", func(w http.ResponseWriter, r *http.Request) {
-		onRefer(w, r)
+		onRefer(w, r, app)
 	})
 
 	router.Post("/upsert-code", func(w http.ResponseWriter, r *http.Request) {

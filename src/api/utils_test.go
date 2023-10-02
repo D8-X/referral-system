@@ -2,11 +2,12 @@ package api
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
 func TestGetCodeSelectionDigest(t *testing.T) {
-	var rc = APIReferralCodeSelectionPayload{
+	var rc = APICodeSelectionPayload{
 		Code:       "ABCD",
 		TraderAddr: "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
 		CreatedOn:  1696166434,
@@ -25,7 +26,7 @@ func TestGetCodeSelectionDigest(t *testing.T) {
 
 func TestRecoverCodeSelectSigAddr(t *testing.T) {
 
-	var rc = APIReferralCodeSelectionPayload{
+	var rc = APICodeSelectionPayload{
 		Code:       "ABCD",
 		TraderAddr: "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
 		CreatedOn:  1696166434,
@@ -40,4 +41,43 @@ func TestRecoverCodeSelectSigAddr(t *testing.T) {
 		t.Errorf("failed: wrong address recovered")
 	}
 	fmt.Println(addr.String())
+}
+
+func TestNewCodeDigest(t *testing.T) {
+	var rc = APICodePayload{
+		Code:          "ABCD",
+		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
+		AgencyAddr:    "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     ""}
+	d, err := GetCodeDigest(rc)
+	if err != nil {
+		t.Errorf("digest failed order: %v", err)
+		return
+	}
+	digestHex := fmt.Sprintf("%x", d)
+	if digestHex != "2ed027b173ffdfdc4d0e0e0d98e258d538cfdb0016e02b0b1c65ee8b1570c1c2" {
+		t.Errorf("failed")
+		return
+	}
+}
+func TestRecoverAddrNewCode(t *testing.T) {
+	var rc = APICodePayload{
+		Code:          "ABCD",
+		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
+		AgencyAddr:    "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     "0x11fd0995864812c3c8f55ddf15a04511213b99f5376e288d94a7aa2e903793e33abaeb6132621880cf1177bb3909c99625cfd1669d6f366597bbd63fa67671a81b"}
+	d, err := RecoverCodeSigAddr(rc)
+	if err != nil {
+		t.Errorf("recover failed order: %v", err)
+		return
+	}
+	digestHex := fmt.Sprintf("%x", d)
+	if digestHex != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
+		t.Errorf("failed")
+		return
+	}
 }

@@ -16,12 +16,12 @@ import (
 	solsha3 "github.com/miguelmota/go-solidity-sha3"
 )
 
-func GetCodeSelectionDigest(rc APIReferralCodeSelectionPayload) ([32]byte, error) {
+func GetCodeSelectionDigest(rc APICodeSelectionPayload) ([32]byte, error) {
 	types := []string{"string", "address", "uint256"}
 	addr := common.HexToAddress(rc.TraderAddr)
 	ts := big.NewInt(int64(rc.CreatedOn))
 	values := []interface{}{rc.Code, addr, ts}
-	digest0, err := AbiEncodeBytes32(types, values...)
+	digest0, err := abiEncodeBytes32(types, values...)
 	if err != nil {
 		return [32]byte{}, err
 	}
@@ -30,7 +30,78 @@ func GetCodeSelectionDigest(rc APIReferralCodeSelectionPayload) ([32]byte, error
 	return digestBytes32, nil
 }
 
-func BytesFromHexString(hexNumber string) ([]byte, error) {
+func GetReferralDigest(rpl APIReferPayload) ([32]byte, error) {
+	types := []string{"address", "address", "uint32", "uint256"}
+	addr := common.HexToAddress(rpl.ReferToAddr)
+	ts := big.NewInt(int64(rpl.CreatedOn))
+	values := []interface{}{addr, rpl.PassOnPercTDF, ts}
+	digest0, err := abiEncodeBytes32(types, values...)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	var digestBytes32 [32]byte
+	copy(digestBytes32[:], solsha3.SoliditySHA3(digest0))
+	return digestBytes32, nil
+}
+
+func GetCodeDigest(rpl APICodePayload) ([32]byte, error) {
+	types := []string{"string", "address", "address", "uint32", "uint256"}
+	addrR := common.HexToAddress(rpl.ReferrerAddr)
+	addrA := common.HexToAddress(rpl.AgencyAddr) // can be 0
+	ts := big.NewInt(int64(rpl.CreatedOn))
+	values := []interface{}{rpl.Code, addrR, addrA, rpl.PassOnPercTDF, ts}
+	digest0, err := abiEncodeBytes32(types, values...)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	var digestBytes32 [32]byte
+	copy(digestBytes32[:], solsha3.SoliditySHA3(digest0))
+	return digestBytes32, nil
+}
+
+// RecoverCodeSelectSigAddr recovers the address of a signed APICodeSelectionPayload
+// which is sent when a trader selects their code
+func RecoverCodeSelectSigAddr(ps APICodeSelectionPayload) (common.Address, error) {
+	digestBytes32, err := GetCodeSelectionDigest(ps)
+	if err != nil {
+		return common.Address{}, err
+	}
+	addr, err := recoverEvmAddress(string(digestBytes32[:]), ps.Signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return addr, nil
+}
+
+// RecoverReferralSigAddr recovers the address of a signed APIReferPayload
+// which is sent when an agency/broker wants to pass on their referral
+func RecoverReferralSigAddr(rpl APIReferPayload) (common.Address, error) {
+	digestBytes32, err := GetReferralDigest(rpl)
+	if err != nil {
+		return common.Address{}, err
+	}
+	addr, err := recoverEvmAddress(string(digestBytes32[:]), rpl.Signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return addr, nil
+}
+
+// RecoverCodeSigAddr recovers the address of a signed APICodePayload
+// which is sent when a referrer creates their code
+func RecoverCodeSigAddr(cp APICodePayload) (common.Address, error) {
+	digestBytes32, err := GetCodeDigest(cp)
+	if err != nil {
+		return common.Address{}, err
+	}
+	addr, err := recoverEvmAddress(string(digestBytes32[:]), cp.Signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return addr, nil
+}
+
+func bytesFromHexString(hexNumber string) ([]byte, error) {
 	data, err := hex.DecodeString(strings.TrimPrefix(hexNumber, "0x"))
 	if err != nil {
 		return []byte{}, err
@@ -38,19 +109,7 @@ func BytesFromHexString(hexNumber string) ([]byte, error) {
 	return data, nil
 }
 
-func RecoverCodeSelectSigAddr(ps APIReferralCodeSelectionPayload) (common.Address, error) {
-	digestBytes32, err := GetCodeSelectionDigest(ps)
-	if err != nil {
-		return common.Address{}, err
-	}
-	addr, err := RecoverEvmAddress(string(digestBytes32[:]), ps.Signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	return addr, nil
-}
-
-func RecoverEvmAddress(data string, signature string) (common.Address, error) {
+func recoverEvmAddress(data string, signature string) (common.Address, error) {
 	// Hash the unsigned message using EIP-191
 	hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(data)) + data)
 	hash := crypto.Keccak256Hash(hashedMessage)
@@ -85,20 +144,20 @@ func WashCode(rawCode string) string {
 	return cleanedCode
 }
 
-func AbiEncodeBytes32(types []string, values ...interface{}) ([]byte, error) {
+func abiEncodeBytes32(types []string, values ...interface{}) ([]byte, error) {
 	if len(types) != len(values) {
 		return []byte{}, fmt.Errorf("number of types and values do not match")
 	}
-	byteSlice, err := AbiEncode(types, values...)
+	byteSlice, err := abiEncode(types, values...)
 	if err != nil {
 		return []byte{}, err
 	}
 	return byteSlice, nil
 }
 
-// AbiEncode encodes the provided types (e.g., string, uint256, int32) and
+// abiEncode encodes the provided types (e.g., string, uint256, int32) and
 // corresponding values into a hex-string for EVM
-func AbiEncode(types []string, values ...interface{}) ([]byte, error) {
+func abiEncode(types []string, values ...interface{}) ([]byte, error) {
 	if len(types) != len(values) {
 		return []byte{}, fmt.Errorf("number of types and values do not match")
 	}

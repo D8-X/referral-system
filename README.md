@@ -7,7 +7,10 @@ Referral system
 
 # API
 
-# Select a referral code as a trader
+## Select a referral code as a trader
+
+http://127.0.0.1:8000/select-code
+
 ```
  {
       "code": "THUANBX",
@@ -28,6 +31,33 @@ Success:
 Error:
 `{"error":"code selection failed:Code already selected"}`
 `{"error":"code selection failed:Failed"}``
+
+## Update or create a code (anyone can be referrer)
+
+http://127.0.0.1:8000/upsert-code
+
+```
+{
+      "code": "ABCD",
+      "referrerAddr": "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
+      "createdOn": 1696166434,
+      "PassOnPercTDF": 225,
+      "signature": "0xb11b9af69b85719093be154bd9a9a23792d1ecb64f70b34dd69fdbec6c7cdf7048d62c6a6d94ee9f65e78aafad2ea45d94765e285a18485b879f814fde17c6b01b"
+}
+```
+Success:
+```
+{
+    "type": "upsert-code",
+    "data": {
+        "code": "ABCD"
+    }
+}
+```
+Error:
+```
+{"error":"code upsert failed:Not code owner"}
+```
 # Notes
 
 

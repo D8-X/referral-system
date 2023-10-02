@@ -28,6 +28,6 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 	})
 
 	router.Post("/upsert-code", func(w http.ResponseWriter, r *http.Request) {
-		onUpsertCode(w, r)
+		onUpsertCode(w, r, app)
 	})
 }

@@ -412,3 +412,38 @@ func (a *App) SelectCode(csp utils.APICodeSelectionPayload) error {
 	}
 	return nil
 }
+
+func (a *App) UpsertCode(csp utils.APICodePayload) error {
+	var passOn float32 = float32(csp.PassOnPercTDF) / 100.0
+	// check whether code exists
+	query := `SELECT referrer_addr 
+		FROM referral_code
+		WHERE code=$1`
+	var refAddr string
+	err := a.Db.QueryRow(query, csp.Code).Scan(&refAddr)
+	if err != sql.ErrNoRows && err != nil {
+		slog.Info("Failed to query latest code:" + err.Error())
+		return errors.New("Failed")
+	} else if err == sql.ErrNoRows {
+		// not found, we can insert
+		query = `INSERT INTO referral_code (code, referrer_addr, trader_rebate_perc)
+          VALUES ($1, $2, $3)`
+		_, err := a.Db.Exec(query, csp.Code, csp.ReferrerAddr, passOn)
+		if err != nil {
+			slog.Error("Failed to insert code" + err.Error())
+			return errors.New("Failed to insert code")
+		}
+		return nil
+	}
+	// found, we check whether the referral addr is correct
+	if strings.ToLower(refAddr) != strings.ToLower(csp.ReferrerAddr) {
+		return errors.New("Not code owner")
+	}
+	query = `UPDATE referral_code SET trader_rebate_perc = $1
+			 WHERE code = $2`
+	_, err = a.Db.Exec(query, passOn, csp.Code)
+	if err != nil {
+		return errors.New("Failed to insert data: " + err.Error())
+	}
+	return nil
+}

@@ -29,3 +29,13 @@ type APIResponseHistEarnings struct {
 	Earnings  float64 `json:"earnings"`
 	TokenName string  `json:"tokenName"`
 }
+
+type OpenPay struct {
+	PoolId    uint32  `json:"poolId"`
+	Amount    float64 `json:"earnings"`
+	TokenName string  `json:"tokenName"`
+}
+type APIResponseOpenEarnings struct {
+	Code    string    `json:"code"`
+	OpenPay []OpenPay `json:"openEarnings"`
+}

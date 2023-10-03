@@ -55,12 +55,13 @@ type DbReferralChain struct {
 }
 
 type DbReferralChainOfChild struct {
-	Parent   string
-	Child    string
-	PassOn   float32 // percent
-	Lvl      uint8
-	ChildPay float64 // rel. fraction of total payment to child; not in DB
+	Parent   string  `json:"parent"`
+	Child    string  `json:"child"`
+	PassOn   float32 `json:"passOnPerc"` // percent
+	Lvl      uint8   `json:"level"`
+	ChildPay float64 `json:"childPayDec"` // rel. fraction of total payment to child; not in DB
 }
+
 type DbReferralCode struct {
 	Code             string
 	ReferrerAddr     string
@@ -234,7 +235,7 @@ func (a *App) SettingsToDB() error {
 	for k := 0; k < len(a.Settings.ReferrerCut); k++ {
 		perc := a.Settings.ReferrerCut[k][0]
 		holding := a.Settings.ReferrerCut[k][1]
-		holdingDecN := toDecN(holding, dec)
+		holdingDecN := utils.FloatToDecN(holding, dec)
 		query = `
 		INSERT INTO referral_setting_cut (cut_perc, holding_amount_dec_n, token_addr)
 		VALUES ($1, $2, $3)`
@@ -246,21 +247,6 @@ func (a *App) SettingsToDB() error {
 	}
 
 	return nil
-}
-
-// toDecN converts a floating point number to a decimal-n,
-// i.e., to num*10^decN
-func toDecN(num float64, decN uint8) *big.Int {
-	// Convert the floating-point number to a big.Float
-	floatNumber := new(big.Float).SetFloat64(num)
-
-	// Multiply the floatNumber by 10^n
-	multiplier := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decN)), nil))
-	result := new(big.Float).Mul(floatNumber, multiplier)
-
-	// Convert the result to a big.Int
-	intResult, _ := result.Int(nil)
-	return intResult
 }
 
 // ConnectDB connects to the database and assigns the connection to the app struct

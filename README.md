@@ -58,6 +58,27 @@ Available for any participant.
   }
 ]
 ```
+## Get request: open payments for traders
+
+http://127.0.0.1:8000/open-pay?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
+
+```
+{
+  "code": "THUANBX",
+  "openEarnings": [
+    {
+      "poolId": 1,
+      "earnings": 0.0462833056659814,
+      "tokenName": "MATIC"
+    },
+    {
+      "poolId": 2,
+      "earnings": 0.0260464926019897,
+      "tokenName": "USDC"
+    }
+  ]
+}
+```
 
 ## Select a referral code as a trader
 

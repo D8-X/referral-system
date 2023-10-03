@@ -342,8 +342,55 @@ func (a *App) SavePayments() error {
 	return nil
 }
 
-func (a *App) CutPercentage(addr string) {
+// Cut percentage returns how much % of the broker fees
+// trickle down to this agency or referrer address
+func (a *App) CutPercentageAgency(addr string) (float64, error) {
+	addr = strings.ToLower(addr)
+	if a.IsAgency(addr) {
+		chain, err := a.DbGetReferralChainOfChild(addr)
+		if err != nil {
+			slog.Error("Error for CutPercentageAgency address " + addr)
+			return 0, errors.New("Could not get percentage")
+		}
+		return 100 * chain[len(chain)-1].ChildPay, nil
+	} else {
+		// referrer without agency, we calculate the rebate based
+		// on token holdings
+		query := `SELECT MAX(cut_perc) as max_cut
+			FROM referral_setting_cut rsc
+			LEFT join referral_token_holdings rth 
+			on rth.referrer_addr = $1
+			WHERE LOWER(rsc.token_addr)= $2
+			AND rsc.holding_amount_dec_n<=rth.holding_amount_dec_n`
+		var cut float64
+		err := a.Db.QueryRow(query, addr, a.Settings.TokenX.Address).Scan(&cut)
+		if err != nil {
+			slog.Error("Error for CutPercentageAgency address " + addr)
+			return 0, errors.New("Could not get percentage")
+		}
+		return cut, nil
+	}
+}
 
+// CutPercentageCode calculates the percent (1% -> 1) rebate on broker trading fees
+// in percent, when selecting this code
+// Code has to be "cleaned" outside this function
+func (a *App) CutPercentageCode(code string) (float64, error) {
+	query := `SELECT referrer_addr, trader_rebate_perc FROM
+		referral_code WHERE code=$1`
+	var refAddr string
+	var traderCut float64
+	err := a.Db.QueryRow(query, code).Scan(&refAddr, &traderCut)
+	if err != nil {
+		slog.Error("Error for CutPercentageCode code " + code)
+		return 0, errors.New("Could not identify code")
+	}
+	passOnCut, err := a.CutPercentageAgency(refAddr)
+	if err != nil {
+		slog.Error("Error for CutPercentageCode code " + code)
+		return 0, errors.New("Could not identify cut")
+	}
+	return passOnCut * traderCut / 100, nil
 }
 
 // Is agency returns true if the address is either the broker,
@@ -353,7 +400,7 @@ func (a *App) IsAgency(addr string) bool {
 		UNION SELECT value as child from referral_setting WHERE property="broker_addr" AND LOWER(value)=$1`
 	var dbAddr string
 	err := a.Db.QueryRow(query, addr).Scan(&dbAddr)
-	return err != sql.ErrNoRows
+	return err != sql.ErrNoRows && dbAddr != ""
 }
 
 // writeDbPayment writes data from multiplay contract into the database

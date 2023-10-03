@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"referral-system/src/referral"
 	"referral-system/src/utils"
+	"strconv"
 	"strings"
 )
 
@@ -200,4 +201,46 @@ func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	jsonResponse := `{"type":"upsert-code", "data":{"code": "` + req.Code + `"}}`
 	w.Write([]byte(jsonResponse))
 
+}
+
+func onCodeRebate(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	// Read the JSON data from the request body
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		errMsg := "Missing 'code' parameter"
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	code = WashCode(code)
+	rebate, err := app.CutPercentageCode(code)
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	// Write the JSON response
+	stringValue := strconv.FormatFloat(rebate*100, 'f', -1, 64)
+	jsonResponse := `{"type":"code-rebate", "data":{"rebate_percent": ` + stringValue + `}}`
+	w.Write([]byte(jsonResponse))
+}
+
+func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	// Read the JSON data from the request body
+	addr := r.URL.Query().Get("addr")
+	if addr == "" {
+		errMsg := "Missing 'addr' parameter"
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	addr = strings.ToLower(addr)
+	cut, err := app.CutPercentageAgency(addr)
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	// Write the JSON response
+	stringValue := strconv.FormatFloat(cut, 'f', -1, 64)
+	jsonResponse := `{"type":"refer-cut", "data":{"passed_on_percent": ` + stringValue + `}}`
+	w.Write([]byte(jsonResponse))
 }

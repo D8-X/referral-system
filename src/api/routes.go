@@ -13,12 +13,18 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 	router.Get("/broker-address", func(w http.ResponseWriter, r *http.Request) {
 		GetBrokerAddress(w, r, a.Pen) // Pass fee here
 	})
-
-	// Endpoint: /broker-fee?perpetualId={perpetualId}
-	router.Get("/broker-fee", func(w http.ResponseWriter, r *http.Request) {
-		GetBrokerFee(w, r, a.BrokerFeeTbps) // Pass fee here
-	})
 	*/
+
+	// Endpoint: /code-rebate?addr=ABCD
+	router.Get("/refer-cut", func(w http.ResponseWriter, r *http.Request) {
+		onReferCut(w, r, app) // Pass fee here
+	})
+
+	// Endpoint: /code-rebate?code=ABCD
+	router.Get("/code-rebate", func(w http.ResponseWriter, r *http.Request) {
+		onCodeRebate(w, r, app) // Pass fee here
+	})
+
 	router.Post("/select-code", func(w http.ResponseWriter, r *http.Request) {
 		onSelectCode(w, r, app)
 	})

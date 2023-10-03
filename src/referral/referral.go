@@ -34,6 +34,11 @@ type Settings struct {
 	PaymentMaxLookBackDays int    `json:"paymentMaxLookBackDays"`
 	PayCronSchedule        string `json:"paymentScheduleMinHourDayofmonthWeekday"`
 	MultiPayContractAddr   string `json:"multiPayContractAddr"`
+	TokenX                 struct {
+		Address  string `json:"address"`
+		Decimals uint8  `json:"decimals"`
+	} `json:"tokenX"`
+	ReferrerCut [][]float64 `json:"referrerCutPercentForTokenXHolding"`
 }
 
 type Rpc struct {
@@ -161,6 +166,7 @@ func loadConfig(v *viper.Viper) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
+	s.TokenX.Address = strings.ToLower(s.TokenX.Address)
 	return s, nil
 }
 
@@ -205,7 +211,47 @@ func (a *App) SettingsToDB() error {
 	if err != nil {
 		return err
 	}
+
+	// referral cut based on token holdings
+	dec := a.Settings.TokenX.Decimals
+	tkn := a.Settings.TokenX.Address
+
+	query = `DELETE FROM referral_setting_cut;`
+	_, err = a.Db.Exec(query)
+	if err != nil {
+		slog.Error(err.Error())
+	}
+
+	for k := 0; k < len(a.Settings.ReferrerCut); k++ {
+		perc := a.Settings.ReferrerCut[k][0]
+		holding := a.Settings.ReferrerCut[k][1]
+		holdingDecN := toDecN(holding, dec)
+		query = `
+		INSERT INTO referral_setting_cut (cut_perc, holding_amount_dec_n, token_addr)
+		VALUES ($1, $2, $3)`
+		_, err = a.Db.Exec(query, perc, holdingDecN.String(), tkn)
+		if err != nil {
+			slog.Error("could not insert referral setting:" + err.Error())
+			continue
+		}
+	}
+
 	return nil
+}
+
+// toDecN converts a floating point number to a decimal-n,
+// i.e., to num*10^decN
+func toDecN(num float64, decN uint8) *big.Int {
+	// Convert the floating-point number to a big.Float
+	floatNumber := new(big.Float).SetFloat64(num)
+
+	// Multiply the floatNumber by 10^n
+	multiplier := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decN)), nil))
+	result := new(big.Float).Mul(floatNumber, multiplier)
+
+	// Convert the result to a big.Int
+	intResult, _ := result.Int(nil)
+	return intResult
 }
 
 func (a *App) ConnectDB(connStr string) error {
@@ -495,5 +541,47 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 		slog.Error("Failed to insert referral" + err.Error())
 		return errors.New("Failed to insert referral")
 	}
+	return nil
+}
+
+// DbUpdateTokenHoldings queries balances of TokenX from the blockchain
+// and updates the holdings in the database
+func (a *App) DbUpdateTokenHoldings() error {
+	// select referrers that are no agency (not in referral chain)
+	query := `SELECT distinct LOWER(rc.referrer_addr) as referrer_addr FROM referral_code rc
+		WHERE expiry>NOW() AND LOWER(referrer_addr) NOT IN
+		(SELECT LOWER(child) as referrer_addr FROM referral_chain)`
+	rows, err := a.Db.Query(query)
+	defer rows.Close()
+	if err != nil {
+		return err
+	}
+
+	tkn, err := a.CreateErc20Instance(a.Settings.TokenX.Address)
+	if err != nil {
+		return err
+	}
+
+	var currReferrerAddr string
+	for rows.Next() {
+		rows.Scan(&currReferrerAddr)
+		slog.Info("Adding addr to list of pure referrers " + currReferrerAddr)
+
+		holdings, err := a.QueryTokenBalance(tkn, currReferrerAddr)
+		if err != nil {
+			slog.Error("Error when trying to get token balance:" + err.Error())
+			continue
+		}
+		query := `
+		INSERT INTO referral_token_holdings (referrer_addr, holding_amount_dec_n, token_addr)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (referrer_addr, token_addr) DO UPDATE SET holding_amount_dec_n = EXCLUDED.holding_amount_dec_n`
+		_, err = a.Db.Exec(query, currReferrerAddr, holdings.String(), a.Settings.TokenX.Address)
+		if err != nil {
+			slog.Error("Error when trying to upsert token balance:" + err.Error())
+			continue
+		}
+	}
+
 	return nil
 }

@@ -219,7 +219,7 @@ func onCodeRebate(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		return
 	}
 	// Write the JSON response
-	stringValue := strconv.FormatFloat(rebate*100, 'f', -1, 64)
+	stringValue := strconv.FormatFloat(rebate, 'f', -1, 64)
 	jsonResponse := `{"type":"code-rebate", "data":{"rebate_percent": ` + stringValue + `}}`
 	w.Write([]byte(jsonResponse))
 }

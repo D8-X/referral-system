@@ -342,7 +342,7 @@ func (a *App) SavePayments() error {
 	return nil
 }
 
-// Cut percentage returns how much % of the broker fees
+// Cut percentage returns how much % (1% is represented as 1) of the broker fees
 // trickle down to this agency or referrer address
 func (a *App) CutPercentageAgency(addr string) (float64, error) {
 	addr = strings.ToLower(addr)

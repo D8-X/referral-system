@@ -14,6 +14,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+/*
+	PayExec implements an interface for either a local broker or a remote
+	broker.
+*/
+
 type PayExec interface {
 	// assign private key and remote broker address
 	Init(viper *viper.Viper) error

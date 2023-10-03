@@ -108,6 +108,7 @@ type DbPayment struct {
 	TxConfirmed  bool
 }
 
+// New intantiates a referral app
 func (a *App) New(viper *viper.Viper) error {
 
 	// decide whether we have a local broker or a remote broker
@@ -155,6 +156,8 @@ func (a *App) New(viper *viper.Viper) error {
 	return nil
 }
 
+// loadConfig loads the configuration file from the file system
+// and returns the Setting struct
 func loadConfig(v *viper.Viper) (Settings, error) {
 	fileName := v.GetString(env.CONFIG_PATH)
 	var s Settings
@@ -170,6 +173,8 @@ func loadConfig(v *viper.Viper) (Settings, error) {
 	return s, nil
 }
 
+// loadRPCConfig loads the RPC list for the
+// configured chain
 func loadRPCConfig(v *viper.Viper) ([]string, error) {
 	fileName := v.GetString(env.RPC_URL_PATH)
 	chainId := v.GetInt(env.CHAIN_ID)
@@ -190,6 +195,7 @@ func loadRPCConfig(v *viper.Viper) ([]string, error) {
 	return []string{}, errors.New("No RPC for chainId " + strconv.Itoa(chainId))
 }
 
+// SettingsToDB stores relevant settings to the DB
 func (a *App) SettingsToDB() error {
 	query := `
 	INSERT INTO referral_settings (property, value)
@@ -254,6 +260,7 @@ func toDecN(num float64, decN uint8) *big.Int {
 	return intResult
 }
 
+// ConnectDB connects to the database and assigns the connection to the app struct
 func (a *App) ConnectDB(connStr string) error {
 	// Connect to database
 	// From documentation: "The returned DB is safe for concurrent use by multiple goroutines and
@@ -301,6 +308,7 @@ func (a *App) DbGetReferralChainOfChild(child string) ([]DbReferralChainOfChild,
 	return chain, nil
 }
 
+// DbGetMarginTkn sets the margin token info in the app-struct
 func (a *App) DbGetMarginTkn() error {
 	if a.Db == nil {
 		return errors.New("Db not initialized")
@@ -372,8 +380,8 @@ func (a *App) CutPercentageAgency(addr string) (float64, error) {
 	}
 }
 
-// CutPercentageCode calculates the percent (1% -> 1) rebate on broker trading fees
-// in percent, when selecting this code
+// CutPercentageCode calculates the percent (1% -> 1) rebate on broker trading fees,
+// when selecting this code
 // Code has to be "cleaned" outside this function
 func (a *App) CutPercentageCode(code string) (float64, error) {
 	query := `SELECT referrer_addr, trader_rebate_perc FROM
@@ -393,7 +401,7 @@ func (a *App) CutPercentageCode(code string) (float64, error) {
 	return passOnCut * traderCut / 100, nil
 }
 
-// Is agency returns true if the address is either the broker,
+// IsAgency returns true if the address is either the broker,
 // or a child in the referral chain (hence an agency)
 func (a *App) IsAgency(addr string) bool {
 	query := `SELECT child from referral_chain WHERE LOWER(child)=$1
@@ -454,7 +462,9 @@ func (a *App) HasLoopOnChainAddition(parent string, newChild string) (bool, erro
 	return false, nil
 }
 
-// SelectCode tries to select a given code. Signature must have been checked
+// SelectCode tries to select a given code for a trader. Future trades will
+// be using this code.
+// Signature must have been checked
 // before. The error message returned (if any) is exposed to the API
 func (a *App) SelectCode(csp utils.APICodeSelectionPayload) error {
 	csp.TraderAddr = strings.ToLower(csp.TraderAddr)
@@ -523,6 +533,7 @@ func (a *App) SelectCode(csp utils.APICodeSelectionPayload) error {
 	return nil
 }
 
+// UpsertCode inserts new codes and updates the code rebate
 func (a *App) UpsertCode(csp utils.APICodePayload) error {
 	var passOn float32 = float32(csp.PassOnPercTDF) / 100.0
 	// check whether code exists
@@ -558,6 +569,7 @@ func (a *App) UpsertCode(csp utils.APICodePayload) error {
 	return nil
 }
 
+// Refer handles new referral requests (checks and insert into db)
 func (a *App) Refer(rpl utils.APIReferPayload) error {
 	var passOn float32 = float32(rpl.PassOnPercTDF) / 100.0
 	rpl.ParentAddr = strings.ToLower(rpl.ParentAddr)

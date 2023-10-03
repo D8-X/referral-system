@@ -57,6 +57,21 @@ func (a *App) CreateMultipayInstance() error {
 	return nil
 }
 
+func (a *App) CreateErc20Instance(tokenAddr string) (*contracts.Erc20, error) {
+	tknAddr := common.HexToAddress(tokenAddr)
+	instance, err := contracts.NewErc20(tknAddr, a.RpcClient)
+	if err != nil {
+		return nil, err
+	}
+	return instance, nil
+}
+
+func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) (*big.Int, error) {
+	ownerAddr := common.HexToAddress(tknOwnerAddr)
+	bal, err := tknCtrct.BalanceOf(&bind.CallOpts{}, ownerAddr)
+	return bal, err
+}
+
 func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client) ([]PaymentLog, error) {
 	// Create an event iterator for the MultiPayPayment events
 	opts := &bind.FilterOpts{

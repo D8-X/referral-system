@@ -221,6 +221,8 @@ func (a *App) ConnectDB(connStr string) error {
 	return nil
 }
 
+// DbGetReferralChainOfChild returns the percentage of trader fees earned by an
+// agency
 func (a *App) DbGetReferralChainOfChild(child string) ([]DbReferralChainOfChild, error) {
 	child = strings.ToLower(child)
 	var row DbReferralChainOfChild
@@ -292,6 +294,20 @@ func (a *App) SavePayments() error {
 
 	}
 	return nil
+}
+
+func (a *App) CutPercentage(addr string) {
+
+}
+
+// Is agency returns true if the address is either the broker,
+// or a child in the referral chain (hence an agency)
+func (a *App) IsAgency(addr string) bool {
+	query := `SELECT child from referral_chain WHERE LOWER(child)=$1
+		UNION SELECT value as child from referral_setting WHERE property="broker_addr" AND LOWER(value)=$1`
+	var dbAddr string
+	err := a.Db.QueryRow(query, addr).Scan(&dbAddr)
+	return err != sql.ErrNoRows
 }
 
 // writeDbPayment writes data from multiplay contract into the database
@@ -453,11 +469,7 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 	var passOn float32 = float32(rpl.PassOnPercTDF) / 100.0
 	rpl.ParentAddr = strings.ToLower(rpl.ParentAddr)
 	// parent can only refer if they are the broker or a child
-	query := `SELECT child from referral_chain WHERE LOWER(child)=$1
-		UNION SELECT value as child from referral_setting WHERE property="broker_addr" AND LOWER(value)=$1`
-	var addr string
-	err := a.Db.QueryRow(query, rpl.ParentAddr).Scan(&addr)
-	if err == sql.ErrNoRows {
+	if !a.IsAgency(rpl.ParentAddr) {
 		return errors.New("Not an agency")
 	}
 	rpl.ReferToAddr = strings.ToLower(rpl.ReferToAddr)
@@ -469,7 +481,8 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 	if h {
 		return errors.New("Referral already in chain")
 	}
-	query = "SELECT child from referral_chain WHERE LOWER(child)=$1"
+	query := "SELECT child from referral_chain WHERE LOWER(child)=$1"
+	var addr string
 	err = a.Db.QueryRow(query, rpl.ReferToAddr).Scan(&addr)
 	if err != sql.ErrNoRows {
 		return errors.New("Refer to addr already in use")

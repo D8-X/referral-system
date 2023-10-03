@@ -4,6 +4,9 @@ Referral system
 # Todos
 
 - walk back in time block-time
+- edit referral?
+- fool-proof loops/cycles in chain
+- get queries
 
 # API
 
@@ -61,6 +64,7 @@ Error:
 
 ## Refer
 /refer
+passOnPercTDF is two-digit format, for example, 2.5% is sent as 250, 65% as 6500
 
 ```
 {
@@ -106,6 +110,8 @@ new:
 3) continue as the old query
 
 ## ok: open-trader-rebate
+
+
 ## ok: agency-rebate
 Now same as referral-rebate
 
@@ -116,15 +122,15 @@ Queries how much rebate the referrer gets for the given token holding amount or 
 
 ## ok: my-referral-codes
 
-## select-referral-code
+## done: select-referral-code
 
-## new: refer
+## done: refer
 as agency or broker (child in referral-chain or broker) we can add a new child.
 the child (refer to address) is not allowed to be already in the quueue
 This needs to be signed by the agency/broker and we need to check the signature
+-Edit?
 
-
-## upsert-referral-code
+- done: upsert-referral-code
 Anyone can create a code. The parent is either a child in the referral_chain, or
 the broker
 

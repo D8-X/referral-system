@@ -28,6 +28,7 @@ type App struct {
 	Rpc             []string
 	RpcClient       *ethclient.Client
 	MultipayCtrct   *contracts.MultiPay
+	BrokerAddr      string
 }
 
 type Settings struct {
@@ -56,9 +57,9 @@ type DbReferralChain struct {
 type DbReferralChainOfChild struct {
 	Parent   string
 	Child    string
-	PassOn   float32
+	PassOn   float32 // percent
 	Lvl      uint8
-	ChildPay float64 // fraction of total payment to child; not in DB
+	ChildPay float64 // rel. fraction of total payment to child; not in DB
 }
 type DbReferralCode struct {
 	Code             string
@@ -209,6 +210,8 @@ func (a *App) SettingsToDB() error {
 
 	// broker address
 	addr := a.PaymentExecutor.GetBrokerAddr().String()
+	addr = strings.ToLower(addr)
+	a.BrokerAddr = addr
 	query = `
 	INSERT INTO referral_settings (property, value)
 	VALUES ($1, $2)
@@ -274,40 +277,6 @@ func (a *App) ConnectDB(connStr string) error {
 	return nil
 }
 
-// DbGetReferralChainOfChild returns the percentage of trader fees earned by an
-// agency
-func (a *App) DbGetReferralChainOfChild(child string) ([]DbReferralChainOfChild, error) {
-	child = strings.ToLower(child)
-	var row DbReferralChainOfChild
-	var chain []DbReferralChainOfChild
-	query := "WITH RECURSIVE child_to_root AS (" +
-		"SELECT child, parent, pass_on, 1 AS lvl " +
-		"FROM referral_chain " +
-		"WHERE lower(child) = '" + child + "' " +
-		"UNION ALL " +
-		"SELECT c.child, c.parent, c.pass_on, cr.lvl + 1 " +
-		"FROM referral_chain c " +
-		"INNER JOIN child_to_root cr ON lower(cr.parent) = lower(c.child)" +
-		") " +
-		"SELECT parent, child, pass_on, lvl " +
-		"FROM child_to_root " +
-		"ORDER BY -lvl;"
-	rows, err := a.Db.Query(query)
-	defer rows.Close()
-	if err != nil {
-		return []DbReferralChainOfChild{}, err
-	}
-	var currentPassOn float64 = 1.0
-	for rows.Next() {
-		rows.Scan(&row.Parent, &row.Child, &row.PassOn, &row.Lvl)
-		currentPassOn = currentPassOn * float64(row.PassOn) / 100.0
-		row.ChildPay = currentPassOn
-		chain = append(chain, row)
-		fmt.Println(row)
-	}
-	return chain, nil
-}
-
 // DbGetMarginTkn sets the margin token info in the app-struct
 func (a *App) DbGetMarginTkn() error {
 	if a.Db == nil {
@@ -350,34 +319,78 @@ func (a *App) SavePayments() error {
 	return nil
 }
 
-// Cut percentage returns how much % (1% is represented as 1) of the broker fees
-// trickle down to this agency or referrer address
-func (a *App) CutPercentageAgency(addr string) (float64, error) {
-	addr = strings.ToLower(addr)
-	if a.IsAgency(addr) {
-		chain, err := a.DbGetReferralChainOfChild(addr)
+// DbGetReferralChainFromChild returns the percentage of trader
+// fees earned by an agency
+func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChild, error) {
+	child = strings.ToLower(child)
+	var chain []DbReferralChainOfChild
+	if a.IsAgency(child) {
+		var row DbReferralChainOfChild
+		query := "WITH RECURSIVE child_to_root AS (" +
+			"SELECT child, parent, pass_on, 1 AS lvl " +
+			"FROM referral_chain " +
+			"WHERE lower(child) = '" + child + "' " +
+			"UNION ALL " +
+			"SELECT c.child, c.parent, c.pass_on, cr.lvl + 1 " +
+			"FROM referral_chain c " +
+			"INNER JOIN child_to_root cr ON lower(cr.parent) = lower(c.child)" +
+			") " +
+			"SELECT parent, child, pass_on, lvl " +
+			"FROM child_to_root " +
+			"ORDER BY -lvl;"
+		rows, err := a.Db.Query(query)
+		defer rows.Close()
 		if err != nil {
-			slog.Error("Error for CutPercentageAgency address " + addr)
-			return 0, errors.New("Could not get percentage")
+			return []DbReferralChainOfChild{}, err
 		}
-		return 100 * chain[len(chain)-1].ChildPay, nil
-	} else {
-		// referrer without agency, we calculate the rebate based
-		// on token holdings
-		query := `SELECT MAX(cut_perc) as max_cut
+		var currentPassOn float64 = 1.0
+		for rows.Next() {
+			rows.Scan(&row.Parent, &row.Child, &row.PassOn, &row.Lvl)
+			currentPassOn = currentPassOn * float64(row.PassOn) / 100.0
+			row.ChildPay = currentPassOn
+			chain = append(chain, row)
+			fmt.Println(row)
+		}
+		return chain, nil
+	}
+
+	// referrer without agency, we calculate the rebate based
+	// on token holdings
+	query := `SELECT MAX(cut_perc) as max_cut
 			FROM referral_setting_cut rsc
 			LEFT join referral_token_holdings rth 
 			on rth.referrer_addr = $1
 			WHERE LOWER(rsc.token_addr)= $2
 			AND rsc.holding_amount_dec_n<=rth.holding_amount_dec_n`
-		var cut float64
-		err := a.Db.QueryRow(query, addr, a.Settings.TokenX.Address).Scan(&cut)
-		if err != nil {
-			slog.Error("Error for CutPercentageAgency address " + addr)
-			return 0, errors.New("Could not get percentage")
-		}
-		return cut, nil
+	var cut float64
+	err := a.Db.QueryRow(query, child, a.Settings.TokenX.Address).Scan(&cut)
+	if err != nil {
+		slog.Error("Error for CutPercentageAgency address " + child)
+		return []DbReferralChainOfChild{}, errors.New("Could not get percentage")
 	}
+	var el = DbReferralChainOfChild{
+		Parent:   a.BrokerAddr,
+		Child:    child,
+		PassOn:   float32(cut),
+		Lvl:      1,
+		ChildPay: cut / 100,
+	}
+	chain = append(chain, el)
+
+	return chain, nil
+}
+
+// Cut percentage returns how much % (1% is represented as 1) of the broker fees
+// trickle down to this agency or referrer address
+func (a *App) CutPercentageAgency(addr string) (float64, error) {
+	addr = strings.ToLower(addr)
+	chain, err := a.DbGetReferralChainFromChild(addr)
+	if err != nil {
+		slog.Error("Error for CutPercentageAgency address " + addr)
+		return 0, errors.New("Could not get percentage")
+	}
+	return 100 * chain[len(chain)-1].ChildPay, nil
+
 }
 
 // CutPercentageCode calculates the percent (1% -> 1) rebate on broker trading fees,
@@ -404,8 +417,8 @@ func (a *App) CutPercentageCode(code string) (float64, error) {
 // IsAgency returns true if the address is either the broker,
 // or a child in the referral chain (hence an agency)
 func (a *App) IsAgency(addr string) bool {
-	query := `SELECT child from referral_chain WHERE LOWER(child)=$1
-		UNION SELECT value as child from referral_setting WHERE property="broker_addr" AND LOWER(value)=$1`
+	query := `SELECT LOWER(child) from referral_chain WHERE LOWER(child)=$1
+		UNION SELECT value as child from referral_settings WHERE property='broker_addr' AND LOWER(value)=$1`
 	var dbAddr string
 	err := a.Db.QueryRow(query, addr).Scan(&dbAddr)
 	return err != sql.ErrNoRows && dbAddr != ""
@@ -449,7 +462,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 // HasLoopOnChainAddition returns true if when adding the new child to the
 // referral chain, there would be a loop
 func (a *App) HasLoopOnChainAddition(parent string, newChild string) (bool, error) {
-	chain, err := a.DbGetReferralChainOfChild(parent)
+	chain, err := a.DbGetReferralChainFromChild(parent)
 	if err != nil {
 		return true, err
 	}

@@ -99,7 +99,7 @@ func onRefer(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
-	if false && !isCurrentTimestamp(req.CreatedOn) {
+	if !isCurrentTimestamp(req.CreatedOn) {
 		errMsg := `timestamp not current`
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
@@ -227,8 +227,8 @@ func onCodeRebate(w http.ResponseWriter, r *http.Request, app *referral.App) {
 func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	// Read the JSON data from the request body
 	addr := r.URL.Query().Get("addr")
-	if addr == "" {
-		errMsg := "Missing 'addr' parameter"
+	if addr == "" || !isValidEvmAddr(addr) {
+		errMsg := "Incorrect 'addr' parameter"
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
@@ -243,4 +243,33 @@ func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	stringValue := strconv.FormatFloat(cut, 'f', -1, 64)
 	jsonResponse := `{"type":"refer-cut", "data":{"passed_on_percent": ` + stringValue + `}}`
 	w.Write([]byte(jsonResponse))
+}
+
+func onEarnings(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	// Read the JSON data from the request body
+	addr := r.URL.Query().Get("addr")
+	if addr == "" || !isValidEvmAddr(addr) {
+		errMsg := "Incorrect 'addr' parameter"
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	addr = strings.ToLower(addr)
+	res, err := app.HistoricEarnings(addr)
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(res)
+	if err != nil {
+		slog.Error("onEarnings unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	w.Write(jsonResponse)
 }

@@ -632,3 +632,29 @@ func (a *App) DbUpdateTokenHoldings() error {
 
 	return nil
 }
+
+// HistoricEarnings calculates historic earnings of any participant
+// (broker-payout address, agent, referrer, trader)
+func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, error) {
+
+	var history []utils.APIResponseHistEarnings
+	query := `SELECT rp.pool_id, rp.code, sum(paid_amount_cc/pow(10, mti.token_decimals)) as earnings, mti.token_name 
+				FROM referral_payment rp
+				JOIN margin_token_info mti
+				on mti.pool_id = rp.pool_id 
+				where LOWER(payee_addr)=$1
+				and rp.tx_confirmed = TRUE
+				group by rp.payee_addr, rp.pool_id, rp.code, mti.token_name;`
+	rows, err := a.Db.Query(query, addr)
+	defer rows.Close()
+	if err != nil {
+		slog.Error("Error for historic earnings" + err.Error())
+		return []utils.APIResponseHistEarnings{}, errors.New("Unable to retreive earnings")
+	}
+	var el utils.APIResponseHistEarnings
+	for rows.Next() {
+		rows.Scan(&el.PoolId, &el.Code, &el.Earnings, &el.TokenName)
+		history = append(history, el)
+	}
+	return history, nil
+}

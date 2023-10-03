@@ -9,11 +9,11 @@ import (
 
 // RegisterRoutes registers all API routes for D8X-Backend application
 func RegisterRoutes(router chi.Router, app *referral.App) {
-	/* Endpoint: /broker-address?id={id}
-	router.Get("/broker-address", func(w http.ResponseWriter, r *http.Request) {
-		GetBrokerAddress(w, r, a.Pen) // Pass fee here
+
+	// Endpoint: /code-rebate?addr=ABCD
+	router.Get("/earnings", func(w http.ResponseWriter, r *http.Request) {
+		onEarnings(w, r, app) // Pass fee here
 	})
-	*/
 
 	// Endpoint: /code-rebate?addr=ABCD
 	router.Get("/refer-cut", func(w http.ResponseWriter, r *http.Request) {

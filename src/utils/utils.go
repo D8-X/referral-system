@@ -22,3 +22,10 @@ type APIReferPayload struct {
 	CreatedOn     uint32 `json:"createdOn"`
 	Signature     string `json:"signature"`
 }
+
+type APIResponseHistEarnings struct {
+	PoolId    uint32  `json:"poolId"`
+	Code      string  `json:"code"`
+	Earnings  float64 `json:"earnings"`
+	TokenName string  `json:"tokenName"`
+}

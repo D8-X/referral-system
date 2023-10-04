@@ -5,6 +5,7 @@ Referral system
 
 - walk back in time block-time
 - edit referral as an agency?
+- schedule time
 - [x] schedule DbUpdateTokenHoldings
 - fool-proof loops/cycles in chain
 - [x] get queries

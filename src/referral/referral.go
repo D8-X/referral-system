@@ -346,7 +346,7 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 	query := `SELECT MAX(cut_perc) as max_cut
 			FROM referral_setting_cut rsc
 			LEFT join referral_token_holdings rth 
-			on rth.referrer_addr = $1
+			on lower(rth.referrer_addr) = $1
 			WHERE LOWER(rsc.token_addr)= $2
 			AND rsc.holding_amount_dec_n<=rth.holding_amount_dec_n`
 	var cut float64
@@ -408,7 +408,7 @@ func (a *App) IsAgency(addr string) bool {
 		UNION SELECT value as child from referral_settings WHERE property='broker_addr' AND LOWER(value)=$1`
 	var dbAddr string
 	err := a.Db.QueryRow(query, addr).Scan(&dbAddr)
-	return err != sql.ErrNoRows && dbAddr != ""
+	return err != sql.ErrNoRows
 }
 
 // writeDbPayment writes data from multiplay contract into the database
@@ -672,7 +672,7 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 // view referral_aggr_fees_per_trader. The func also returns the last
 // token balance update time
 func (a *App) DbGetActiveReferrers() ([]string, []time.Time, error) {
-	query := `select distinct(rc.referrer_addr), rth.last_updated 
+	query := `select distinct(lower(rc.referrer_addr)), rth.last_updated 
 			  from referral_aggr_fees_per_trader rafpt 
 			  join referral_code rc 
 				on rc.code = rafpt.code

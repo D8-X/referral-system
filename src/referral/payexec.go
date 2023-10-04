@@ -93,13 +93,21 @@ func (exc *LocalPayExec) Init(viper *viper.Viper) error {
 	return nil
 }
 
+func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) {
+	slog.Info("transact " + msg + ", batch " + strconv.FormatInt(id, 10))
+	for k := 0; k < len(payees); k++ {
+		slog.Info(" -- Payee " + payees[k].String())
+		slog.Info("    Amount (decN)" + amounts[k].String())
+	}
+}
+
 func (exc *LocalPayExec) TransactPayment(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) error {
-	slog.Info("transact " + msg)
+	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
 	return nil
 }
 
 func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) error {
-	slog.Info("transact " + msg)
+	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
 	return nil
 }
 

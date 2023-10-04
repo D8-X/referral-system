@@ -617,10 +617,10 @@ func (a *App) DbUpdateTokenHoldings() error {
 	for k := 0; k < len(refAddr); k++ {
 		currReferrerAddr := refAddr[k]
 		if lastUpdate[k] != (time.Time{}) && nowTime.Sub(lastUpdate[k]).Hours() < env.REFERRER_TOKENX_BAL_FREQ_H {
-			slog.Info("Now balance update required for referrer " + currReferrerAddr)
+			slog.Info("No balance update required for referrer " + currReferrerAddr)
 			continue
 		}
-		slog.Info("Adding addr to list of pure referrers " + currReferrerAddr)
+		slog.Info("Updating balance for referrer" + currReferrerAddr)
 
 		holdings, err := a.QueryTokenBalance(tkn, currReferrerAddr)
 		if err != nil {

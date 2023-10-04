@@ -86,8 +86,15 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 	return res, nil
 }
 
+// ProcessAllPayments determins how much to pay and ultimately delegates
+// payment execution to payexec
 func (a *App) ProcessAllPayments() error {
-	// query snapshot the open pay view
+	// update token holdings
+	err := a.DbUpdateTokenHoldings()
+	if err != nil {
+		return errors.New("ProcessAllPayments: Failed to update token holdings " + err.Error())
+	}
+	// query snapshot of open pay view
 	currentTime := time.Now().Unix()
 	batchTs := fmt.Sprintf("%d", currentTime)
 	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 

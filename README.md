@@ -4,10 +4,11 @@ Referral system
 # Todos
 
 - walk back in time block-time
-- edit referral?
-- schedule DbUpdateTokenHoldings
+- edit referral as an agency?
+- [x] schedule DbUpdateTokenHoldings
 - fool-proof loops/cycles in chain
-- get queries
+- [x] get queries
+- [x] no minimal fee accumulation implemented (requires price feed or config)
 
 # API
 

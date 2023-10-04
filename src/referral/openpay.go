@@ -137,12 +137,12 @@ func (a *App) ProcessAllPayments() error {
 
 func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
-	payees := make([]common.Address, len(chain)+1)
-	amounts := make([]*big.Int, len(chain)+1)
+	payees := make([]common.Address, len(chain))
+	amounts := make([]*big.Int, len(chain))
 	// trader address must go first
 	payees[0] = common.HexToAddress(row.TraderAddr)
 	distributed := new(big.Int).SetInt64(0)
-	for k := len(chain) - 1; k >= 0; k-- {
+	for k := len(chain) - 1; k > 0; k-- {
 		el := chain[k]
 		amount := utils.DecNTimesFloat(totalDecN, el.ChildPay)
 		idx := len(chain) - 1 - k

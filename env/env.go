@@ -2,7 +2,7 @@ package env
 
 // Environment variable names
 const (
-	// base url for pyth historical data API
+	// environment variables
 	DATABASE_DSN_HISTORY = "DATABASE_DSN_HISTORY"
 	CONFIG_PATH          = "CONFIG_PATH"
 	CHAIN_ID             = "CHAIN_ID"
@@ -11,4 +11,8 @@ const (
 	BROKER_KEY           = "BROKER_KEY"
 	API_PORT             = "API_PORT"
 	API_BIND_ADDR        = "API_BIND_ADDR"
+
+	// other constants
+	DEFAULT_CODE               = "DEFAULT"
+	REFERRER_TOKENX_BAL_FREQ_H = 24 * 5
 )

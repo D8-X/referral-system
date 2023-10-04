@@ -40,7 +40,7 @@ func Run() {
 	}
 	// update token holdings
 	app.DbUpdateTokenHoldings()
-
+	app.ProcessAllPayments()
 	api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT))
 	//app.DbGetReferralChainOfChild("0x9d5aaB428e98678d0E645ea4AeBd25f744341a05")
 	//https://github.com/gitploy-io/cronexpr

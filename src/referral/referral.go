@@ -39,7 +39,8 @@ type Settings struct {
 		Address  string `json:"address"`
 		Decimals uint8  `json:"decimals"`
 	} `json:"tokenX"`
-	ReferrerCut [][]float64 `json:"referrerCutPercentForTokenXHolding"`
+	ReferrerCut      [][]float64    `json:"referrerCutPercentForTokenXHolding"`
+	BrokerPayoutAddr common.Address `json:"brokerPayoutAddr"`
 }
 
 type Rpc struct {
@@ -603,26 +604,22 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 }
 
 // DbUpdateTokenHoldings queries balances of TokenX from the blockchain
-// and updates the holdings in the database
+// and updates the holdings for active referrers in the database
 func (a *App) DbUpdateTokenHoldings() error {
 	// select referrers that are no agency (not in referral chain)
-	query := `SELECT distinct LOWER(rc.referrer_addr) as referrer_addr FROM referral_code rc
-		WHERE expiry>NOW() AND LOWER(referrer_addr) NOT IN
-		(SELECT LOWER(child) as referrer_addr FROM referral_chain)`
-	rows, err := a.Db.Query(query)
-	defer rows.Close()
-	if err != nil {
-		return err
-	}
+	refAddr, lastUpdate, err := a.DbGetActiveReferrers()
 
 	tkn, err := a.CreateErc20Instance(a.Settings.TokenX.Address)
 	if err != nil {
 		return err
 	}
-
-	var currReferrerAddr string
-	for rows.Next() {
-		rows.Scan(&currReferrerAddr)
+	nowTime := time.Now()
+	for k := 0; k < len(refAddr); k++ {
+		currReferrerAddr := refAddr[k]
+		if lastUpdate[k] != (time.Time{}) && nowTime.Sub(lastUpdate[k]).Hours() < env.REFERRER_TOKENX_BAL_FREQ_H {
+			slog.Info("Now balance update required for referrer " + currReferrerAddr)
+			continue
+		}
 		slog.Info("Adding addr to list of pure referrers " + currReferrerAddr)
 
 		holdings, err := a.QueryTokenBalance(tkn, currReferrerAddr)
@@ -668,4 +665,34 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 		history = append(history, el)
 	}
 	return history, nil
+}
+
+// DbGetActiveReferrers returns a list of addresses that are
+// (1) not an agency, (2) have a code which is used in the
+// view referral_aggr_fees_per_trader. The func also returns the last
+// token balance update time
+func (a *App) DbGetActiveReferrers() ([]string, []time.Time, error) {
+	query := `select distinct(rc.referrer_addr), rth.last_updated 
+			  from referral_aggr_fees_per_trader rafpt 
+			  join referral_code rc 
+				on rc.code = rafpt.code
+				and LOWER(rc.referrer_addr) not in (select LOWER(rc2.child) from referral_chain rc2)
+			  left join referral_token_holdings rth 
+				on LOWER(rth.referrer_addr) = LOWER(rc.referrer_addr)`
+	rows, err := a.Db.Query(query)
+	defer rows.Close()
+	if err != nil {
+		msg := ("Error getting DbGetActiveReferrers" + err.Error())
+		return []string{}, []time.Time{}, errors.New(msg)
+	}
+	var refAddr []string
+	var lastUpdts []time.Time
+	for rows.Next() {
+		var addr string
+		var ts time.Time
+		rows.Scan(&addr, &ts)
+		refAddr = append(refAddr, addr)
+		lastUpdts = append(lastUpdts, ts)
+	}
+	return refAddr, lastUpdts, nil
 }

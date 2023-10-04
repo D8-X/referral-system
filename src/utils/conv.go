@@ -44,3 +44,15 @@ func ABDKToFloat(num *big.Int) float64 {
 	f, _ := res.Float64()
 	return f
 }
+
+// DecNTimesFloat multiplies a decimal-N number
+// with a fraction in decimal system. One application
+// is to get a relative share (e.g., 1%) of the
+// decimal-n number in the same decimal-n format
+func DecNTimesFloat(num *big.Int, m float64) *big.Int {
+	numf := new(big.Float).SetInt(num)
+	mulf := new(big.Float).SetFloat64(m)
+	res := new(big.Float).Mul(mulf, numf)
+	resInt, _ := res.Int(nil)
+	return resInt
+}

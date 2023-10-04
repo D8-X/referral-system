@@ -2,11 +2,26 @@ package referral
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
+	"referral-system/env"
 	"referral-system/src/utils"
+	"strconv"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
+
+type AggregatedFeesRow struct {
+	PoolId              uint32
+	TraderAddr          string
+	Code                string
+	BrokerFeeABDKCC     *big.Int
+	LastTradeConsidered time.Time
+	TokenAddr           string
+	TokenDecimals       uint8
+}
 
 func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) {
 	type AggrFees struct {
@@ -38,7 +53,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 		var el AggrFees
 		rows.Scan(&el.PoolId, &el.Code, &el.BrokerFeeCc,
 			&el.LastTradeConsidered, &el.TokenName, &el.TokenDecimals)
-		if el.Code == "DEFAULT" {
+		if el.Code == env.DEFAULT_CODE {
 			var op = utils.OpenPay{
 				PoolId:    el.PoolId,
 				Amount:    0,
@@ -71,9 +86,91 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 	return res, nil
 }
 
+func (a *App) ProcessAllPayments() error {
+	// query snapshot the open pay view
+	currentTime := time.Now().Unix()
+	batchTs := fmt.Sprintf("%d", currentTime)
+	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 
+				agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
+				mti.token_addr, mti.token_decimals
+			  FROM referral_aggr_fees_per_trader agfpt
+			  JOIN margin_token_info mti
+			  ON mti.pool_id = agfpt.pool_id`
+	rows, err := a.Db.Query(query)
+	defer rows.Close()
+	if err != nil {
+		slog.Error("Error for process pay" + err.Error())
+		return err
+	}
+	var aggrFeesPerTrader []AggregatedFeesRow
+	codePaths := make(map[string][]DbReferralChainOfChild)
+	for rows.Next() {
+		var el AggregatedFeesRow
+		var fee string
+		rows.Scan(&el.PoolId, &el.TraderAddr, &el.Code, &fee,
+			&el.LastTradeConsidered, &el.TokenAddr, &el.TokenDecimals)
+		el.BrokerFeeABDKCC = new(big.Int)
+		el.BrokerFeeABDKCC.SetString(fee, 10)
+		aggrFeesPerTrader = append(aggrFeesPerTrader, el)
+
+		// determine referralchain for the code
+		if _, exists := codePaths[el.Code]; !exists {
+			chain, err := a.DbGetReferralChainForCode(el.Code)
+			if err != nil {
+				slog.Error("Could not find referral chain for code " + el.Code + ": " + err.Error())
+				continue
+			}
+			codePaths[el.Code] = chain
+		}
+		// process
+		a.processPayment(el, codePaths[el.Code], batchTs)
+	}
+	return nil
+}
+
+func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) {
+	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
+	payees := make([]common.Address, len(chain)+1)
+	amounts := make([]*big.Int, len(chain)+1)
+	// trader address must go first
+	payees[0] = common.HexToAddress(row.TraderAddr)
+	distributed := new(big.Int).SetInt64(0)
+	for k := len(chain) - 1; k >= 0; k-- {
+		el := chain[k]
+		amount := utils.DecNTimesFloat(totalDecN, el.ChildPay)
+		idx := len(chain) - 1 - k
+		amounts[idx] = amount
+		if idx > 0 {
+			payees[idx] = common.HexToAddress(el.Child)
+		}
+		distributed.Add(distributed, amount)
+	}
+	// parent
+	amount := new(big.Int)
+	amount.Sub(totalDecN, distributed)
+	payees[len(payees)-1] = a.Settings.BrokerPayoutAddr
+	amounts[len(payees)-1] = amount
+	// encode message: batchTs.<code>.<poolId>
+	msg := batchTs + "." + row.Code + "." + strconv.Itoa(int(row.PoolId))
+	// id = lastTradeConsideredTs in seconds
+	id := row.LastTradeConsidered.Unix()
+	a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), amounts, payees, id, msg)
+}
+
 // DbGetReferralChainForCode gets the entire chain of referrals
 // for a code, calculating what each participant earns (percent)
 func (a *App) DbGetReferralChainForCode(code string) ([]DbReferralChainOfChild, error) {
+	if code == env.DEFAULT_CODE {
+		res := make([]DbReferralChainOfChild, 1)
+		res[0] = DbReferralChainOfChild{
+			Parent:   a.Settings.BrokerPayoutAddr.String(),
+			Child:    "DEFAULT",
+			PassOn:   0,
+			Lvl:      0,
+			ChildPay: 0,
+		}
+		return res, nil
+	}
 	query := `SELECT LOWER(referrer_addr), trader_rebate_perc
 		FROM referral_code WHERE code = $1`
 	var refAddr string

@@ -4,6 +4,8 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"math/big"
 	"net/http"
 	"referral-system/env"
 	"strconv"
@@ -23,7 +25,7 @@ type PayExec interface {
 	// assign private key and remote broker address
 	Init(viper *viper.Viper) error
 	GetBrokerAddr() common.Address
-	//ExecutePayment(p PaymentExecution) error
+	TransactPayment(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) error
 }
 
 type basePayExec struct {
@@ -88,6 +90,16 @@ func (exc *LocalPayExec) Init(viper *viper.Viper) error {
 		return err
 	}
 	exc.BrokerAddr = common.HexToAddress(addrStr)
+	return nil
+}
+
+func (exc *LocalPayExec) TransactPayment(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) error {
+	slog.Info("transact " + msg)
+	return nil
+}
+
+func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) error {
+	slog.Info("transact " + msg)
 	return nil
 }
 

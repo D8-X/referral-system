@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"referral-system/env"
 	"referral-system/src/referral"
 	"referral-system/src/utils"
 	"strconv"
@@ -187,7 +188,14 @@ func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
+
 	req.Code = WashCode(req.Code)
+	if req.Code == env.DEFAULT_CODE {
+		// default code is reserved for traders without code
+		errMsg := `code invalid`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
 	// hand over to db process
 	err = app.UpsertCode(req)
 	if err != nil {

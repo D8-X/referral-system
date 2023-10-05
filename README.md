@@ -230,6 +230,17 @@ Error:
 ```
 {"error":"Incorrect 'addr' parameter"}
 ```
+
+## Get request: code selection of a trader
+
+http://127.0.0.1:8000/my-code-selection?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
+
+a code selected:
+`{"type":"my-code-selection","data":"THUANBX"}`
+
+no code:
+`{"type":"my-code-selection","data":""}`
+
 ## Post: Select a referral code as a trader
 
 http://127.0.0.1:8000/select-code
@@ -309,25 +320,6 @@ only one occurrence as child allowed:
 `{"error":"referral failed:Refer to addr already in use"}`
 `{"error":"referral failed:Not an agency"}`
 
-
-# Notes
-
-
-## ok: Earned rebate
-`earned-rebate?referrerAddr=0x...|traderAddr=0x...|agencyAddr=0x...`
-
-## referral-volume
-Calculate the total referred volume
-`https://referral.zkdev.d8x.xyz/referral-volume?referrerAddr=0x20ec1a4332140f26d7b910554e3baaa429ca3756`
-old:
- // 1) identify codes for the referrer
- // 2) for each code look-up code usage for (trader, from, to)
- // 3) query trading volume (trader, from, to) from API for each record found in 2
- // 4) aggregate
-new:
-1) identify all agencies/referrers in the referral_chain that are a child of the given agency
-2) identify all codes that are issued by these addresses
-3) continue as the old query
 
 
 ## Contracts

@@ -724,3 +724,19 @@ func (a *App) DbGetMyReferrals(addr string) ([]utils.APIResponseMyReferrals, err
 	}
 	return res, nil
 }
+
+func (a *App) DbGetMyCodeSelection(addr string) (string, error) {
+	query := `select code
+			  from referral_code_usage rcu 
+			  where lower(rcu.trader_addr) = $1
+			  and valid_to>NOW() and valid_from<NOW()`
+	var code string
+	err := a.Db.QueryRow(query, addr).Scan(&code)
+	if err == sql.ErrNoRows {
+		return "", nil
+	} else if err != nil {
+		slog.Error("DbMyCodeSelection failed:" + err.Error())
+		return "", errors.New("Code retrieval failed")
+	}
+	return code, nil
+}

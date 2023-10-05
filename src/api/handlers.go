@@ -375,3 +375,33 @@ func onMyReferrals(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	}
 	w.Write(jsonResponse)
 }
+
+func OnMyCodeSelection(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	addr := r.URL.Query().Get("traderAddr")
+	if addr == "" || !isValidEvmAddr(addr) {
+		errMsg := "Incorrect 'traderAddr' parameter"
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	addr = strings.ToLower(addr)
+	code, err := app.DbGetMyCodeSelection(addr)
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	response := utils.APIResponse{Type: "my-code-selection", Data: code}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		slog.Error("OnMyCodeSelection unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResponse)
+}

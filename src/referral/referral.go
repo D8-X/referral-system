@@ -645,13 +645,18 @@ func (a *App) DbUpdateTokenHoldings() error {
 func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, error) {
 
 	var history []utils.APIResponseHistEarnings
-	query := `SELECT rp.pool_id, rp.code, sum(paid_amount_cc/pow(10, mti.token_decimals)) as earnings, mti.token_name 
-				FROM referral_payment rp
-				JOIN margin_token_info mti
-				on mti.pool_id = rp.pool_id 
-				where LOWER(payee_addr)=$1
+	query := `SELECT rp.pool_id, 
+				CASE
+					WHEN rp.trader_addr = rp.payee_addr THEN 1 -- True if trader_addr is equal to payee_addr
+					ELSE 0 -- False otherwise
+				END AS as_trader,
+				rp.code, sum(paid_amount_cc/pow(10, mti.token_decimals)) as earnings, mti.token_name 
+			FROM referral_payment rp
+			JOIN margin_token_info mti
+				on mti.pool_id = rp.pool_id
+			where LOWER(payee_addr)=$1
 				and rp.tx_confirmed = TRUE
-				group by rp.payee_addr, rp.pool_id, rp.code, mti.token_name;`
+			group by as_trader, rp.payee_addr, rp.pool_id, rp.code, mti.token_name;`
 	rows, err := a.Db.Query(query, addr)
 	defer rows.Close()
 	if err != nil {
@@ -660,7 +665,7 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 	}
 	var el utils.APIResponseHistEarnings
 	for rows.Next() {
-		rows.Scan(&el.PoolId, &el.Code, &el.Earnings, &el.TokenName)
+		rows.Scan(&el.PoolId, &el.AsTrader, &el.Code, &el.Earnings, &el.TokenName)
 		history = append(history, el)
 	}
 	return history, nil

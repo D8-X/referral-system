@@ -48,19 +48,13 @@ type Rpc struct {
 	Rpc     []string `json:"HTTP"`
 }
 
-type DbReferralChain struct {
-	Parent    string
-	Child     string
-	PassOn    float32
-	CreatedOn time.Time
-}
-
 type DbReferralChainOfChild struct {
-	Parent   string  `json:"parent"`
-	Child    string  `json:"child"`
-	PassOn   float32 `json:"passOnPerc"` // percent
-	Lvl      uint8   `json:"level"`
-	ChildPay float64 `json:"childPayDec"` // rel. fraction of total payment to child; not in DB
+	Parent     string  `json:"parent"`
+	Child      string  `json:"child"`
+	PassOn     float64 `json:"passOnDec"` // rel. pass on (0.2 for 20%)
+	Lvl        uint8   `json:"level"`
+	ParentPay  float64 `json:"parentPayDec"`  // rel. fraction of total payment to parent
+	ChildAvail float64 `json:"childAvailDec"` // rel. fraction of total payment that child can redistribute
 }
 
 type DbReferralCode struct {
@@ -333,8 +327,10 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 		var currentPassOn float64 = 1.0
 		for rows.Next() {
 			rows.Scan(&row.Parent, &row.Child, &row.PassOn, &row.Lvl)
-			currentPassOn = currentPassOn * float64(row.PassOn) / 100.0
-			row.ChildPay = currentPassOn
+			row.PassOn = row.PassOn / 100.0
+			row.ParentPay = currentPassOn * (1.0 - row.PassOn)
+			currentPassOn = currentPassOn * row.PassOn
+			row.ChildAvail = currentPassOn
 			chain = append(chain, row)
 			fmt.Println(row)
 		}
@@ -355,12 +351,14 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 		slog.Error("Error for CutPercentageAgency address " + child)
 		return []DbReferralChainOfChild{}, errors.New("Could not get percentage")
 	}
+	cut = cut / 100
 	var el = DbReferralChainOfChild{
-		Parent:   a.BrokerAddr,
-		Child:    child,
-		PassOn:   float32(cut),
-		Lvl:      1,
-		ChildPay: cut / 100,
+		Parent:     a.BrokerAddr,
+		Child:      child,
+		PassOn:     cut,
+		ParentPay:  1.0 - cut,
+		ChildAvail: cut,
+		Lvl:        1,
 	}
 	chain = append(chain, el)
 
@@ -376,7 +374,7 @@ func (a *App) CutPercentageAgency(addr string) (float64, error) {
 		slog.Error("Error for CutPercentageAgency address " + addr)
 		return 0, errors.New("Could not get percentage")
 	}
-	return 100 * chain[len(chain)-1].ChildPay, nil
+	return 100 * chain[len(chain)-1].ChildAvail, nil
 
 }
 

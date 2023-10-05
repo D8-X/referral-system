@@ -32,6 +32,8 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 		TokenName           string
 		TokenDecimals       uint8
 	}
+	// get aggregated fees per pool and associated margin token info
+	// for the given trader
 	query := `SELECT 
 				mti.pool_id, rafpt.code, rafpt.broker_fee_cc, 
 				rafpt.last_trade_considered_ts, 
@@ -54,6 +56,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 		rows.Scan(&el.PoolId, &el.Code, &el.BrokerFeeCc,
 			&el.LastTradeConsidered, &el.TokenName, &el.TokenDecimals)
 		if el.Code == env.DEFAULT_CODE {
+			// no code, hence no rebate
 			var op = utils.OpenPay{
 				PoolId:    el.PoolId,
 				Amount:    0,
@@ -62,7 +65,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 			payments = append(payments, op)
 			continue
 		}
-		if codeChain.Child == "" {
+		if res.Code != el.Code {
 			chain, err := a.DbGetReferralChainForCode(el.Code)
 			if err != nil {
 				slog.Error("Error in OpenPay" + err.Error())
@@ -74,7 +77,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 		fee := new(big.Int)
 		fee.SetString(el.BrokerFeeCc, 10)
 		amount := utils.ABDKToFloat(fee)
-		amount = amount * codeChain.ChildPay
+		amount = amount * codeChain.ChildAvail
 		var op = utils.OpenPay{
 			PoolId:    el.PoolId,
 			Amount:    amount,
@@ -137,26 +140,28 @@ func (a *App) ProcessAllPayments() error {
 
 func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
-	payees := make([]common.Address, len(chain))
-	amounts := make([]*big.Int, len(chain))
+	payees := make([]common.Address, len(chain)+1)
+	amounts := make([]*big.Int, len(chain)+1)
+	// order: trader, broker, [agent1, agent2, ...], referrer
 	// trader address must go first
 	payees[0] = common.HexToAddress(row.TraderAddr)
-	distributed := new(big.Int).SetInt64(0)
-	for k := len(chain) - 1; k > 0; k-- {
+	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail)
+	distributed := new(big.Int).Set(amounts[0])
+	// we start at 1 (after broker), to set the broker amount to the
+	// remainder (to avoid floating point rounding issues)
+	for k := 1; k < len(chain); k++ {
 		el := chain[k]
-		amount := utils.DecNTimesFloat(totalDecN, el.ChildPay)
-		idx := len(chain) - 1 - k
-		amounts[idx] = amount
-		if idx > 0 {
-			payees[idx] = common.HexToAddress(el.Child)
-		}
+		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay)
+		amounts[k+1] = amount
+		payees[k+1] = common.HexToAddress(el.Parent)
 		distributed.Add(distributed, amount)
 	}
-	// parent
-	amount := new(big.Int)
-	amount.Sub(totalDecN, distributed)
-	payees[len(payees)-1] = a.Settings.BrokerPayoutAddr
-	amounts[len(payees)-1] = amount
+	// parent amount goes to broker payout address
+	payees[1] = a.Settings.BrokerPayoutAddr
+	// amount for parent is set to remainder so that we ensure
+	// totalDecN = sum of distributed amounts
+	amounts[1] = new(big.Int).Sub(totalDecN, distributed)
+
 	// encode message: batchTs.<code>.<poolId>
 	msg := batchTs + "." + row.Code + "." + strconv.Itoa(int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
@@ -170,11 +175,12 @@ func (a *App) DbGetReferralChainForCode(code string) ([]DbReferralChainOfChild, 
 	if code == env.DEFAULT_CODE {
 		res := make([]DbReferralChainOfChild, 1)
 		res[0] = DbReferralChainOfChild{
-			Parent:   a.Settings.BrokerPayoutAddr.String(),
-			Child:    "DEFAULT",
-			PassOn:   0,
-			Lvl:      0,
-			ChildPay: 0,
+			Parent:     a.Settings.BrokerPayoutAddr.String(),
+			Child:      "DEFAULT",
+			PassOn:     0,
+			ParentPay:  1,
+			ChildAvail: 0,
+			Lvl:        0,
 		}
 		return res, nil
 	}
@@ -186,17 +192,19 @@ func (a *App) DbGetReferralChainForCode(code string) ([]DbReferralChainOfChild, 
 	if err != nil {
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}
+	traderCut = traderCut / 100
 	chain, err := a.DbGetReferralChainFromChild(refAddr)
 	if err != nil {
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}
-	crumble := chain[len(chain)-1].ChildPay
+	crumble := chain[len(chain)-1].ChildAvail
 	codeUser := DbReferralChainOfChild{
-		Parent:   refAddr,
-		Child:    code,
-		PassOn:   float32(traderCut),
-		Lvl:      0,
-		ChildPay: crumble * traderCut / 100,
+		Parent:     refAddr,
+		Child:      code,
+		PassOn:     traderCut,
+		ParentPay:  crumble * (1 - traderCut),
+		ChildAvail: crumble * traderCut,
+		Lvl:        0,
 	}
 	chain = append(chain, codeUser)
 	return chain, nil

@@ -3,6 +3,10 @@ Referral system
 
 # Todos
 
+- mycodes as referrer 
+  (what does referrer get, what does trader get)
+- agency: code/partner
+- max 10 agencies
 - walk back in time block-time for historical payments
 - edit referral percentages as an agency?
 - schedule payment time
@@ -13,7 +17,127 @@ Referral system
 
 # API
 
+Definitions:
+- The **broker** is an address that is specified in the backend settings and signs the trades and determines a 'broker fee' that the trader pays on their trade.
+- **Referral codes** will give the trader a rebate on their broker fees that they get paid out as scheduled in the backend (e.g., once a week). The creator of the code also gets a cut of the fees that the trader paid.
+- An **agency** is an address that refer to other addresses that then become agencies. If such a downstream agency creates a code, all agencies in the chain earn in relative terms from the trading fees paid by the trader that is using the referral code. The broker is an agency. 
+  - Consequently, the broker is the root agency for all agencies. 
+  - An agency can refer to many other addresses and make them an agency. 
+  - No loops: An agency can only be referred to by one agency.
+- A **referrer** is an address that created a code. A code can be created by anyone. If the code was created by an agency, the rebate depends on the entire chain of agencies and the code's specific pass-on percentage. If the code was created by an address that is not an agency, the trader rebate and referrer cut depends on the referrer's token holdings as specified in the broker backend settings.
+
+
+
+<details>
+<summary>Temporary request</summary>
+http://127.0.0.1:8000/food-chain?code=ABCD
+
+This will probably be removed: it shows the entire food chain
+of a code.
+
+```
+[
+  {
+    "parent": "0x21B864083eedF1a4279dA1a9A7B1321E6102fD39",
+    "child": "0xCCC864083eedF1a4279dA1a9A7B1321E6102fD39",
+    "passOnDec": 0.8,
+    "level": 5,
+    "parentPayDec": 0.2,
+    "childAvailDec": 0.8
+  },
+  {
+    "parent": "0xCCC864083eedF1a4279dA1a9A7B1321E6102fD39",
+    "child": "0x20ec1a4332140f26d7b910554e3baaa429ca3756",
+    "passOnDec": 0.1,
+    "level": 4,
+    "parentPayDec": 0.72,
+    "childAvailDec": 0.08
+  },
+  {
+    "parent": "0x20ec1a4332140f26d7b910554e3baaa429ca3756",
+    "child": "0x5A09217F6D36E73eE5495b430e889f8c57876Ef3",
+    "passOnDec": 0.05,
+    "level": 3,
+    "parentPayDec": 0.076,
+    "childAvailDec": 0.004
+  },
+  {
+    "parent": "0x5a09217f6d36e73ee5495b430e889f8c57876ef3",
+    "child": "0x863ad9ce46acf07fd9390147b619893461036194",
+    "passOnDec": 0.0225,
+    "level": 2,
+    "parentPayDec": 0.00391,
+    "childAvailDec": 0.00009
+  },
+  {
+    "parent": "0x863ad9ce46acf07fd9390147b619893461036194",
+    "child": "0x6fe871703eb23771c4016eb62140367944e8edfc",
+    "passOnDec": 0.15,
+    "level": 1,
+    "parentPayDec": 0.0000765,
+    "childAvailDec": 0.0000135
+  },
+  {
+    "parent": "0x6fe871703eb23771c4016eb62140367944e8edfc",
+    "child": "FREEMATIC",
+    "passOnDec": 0.0333,
+    "level": 0,
+    "parentPayDec": 0.00001305045,
+    "childAvailDec": 4.4955e-7
+  }
+]
+```
+</details>
+
+
+## Get request: get all directly referred 'partners'
+Who are my partners/codes that I assigned as an agency/referrer
+and how much from my percentage cut do I pass on?
+
+Returns 'downstream' partner addresses and directly entered codes and
+the percentages that are passed on to them.
+That is, the percentage obtained from `refer-cut` is 
+further divided according to the `my-referrral` percentages.
+
+
+http://127.0.0.1:8000/my-referrals?addr=0x0ab6527027ecff1144dec3d78154fce309ac838c
+
+Example of an agency that is also a referrer. The code(s) 
+that address 0x0a... created are
+reported by their names, and the referred agencies are reported
+by their addresses.
+
+```
+{
+  "type": "my-referrals",
+  "data": [
+    {
+      "referral": "0x20ec1a4332140f26d7b910554e3baaa429ca3756",
+      "PassOnPerc": 10
+    },
+    {
+      "referral": "AGENTUR",
+      "PassOnPerc": 25
+    },
+    {
+      "referral": "0xfacada864083eed4279dA1a9A7B1321E6102fD39",
+      "PassOnPerc": 20
+    }
+  ]
+}
+```
+
+No codes or agency referrals in the chain:
+```
+{
+  "type": "my-referrals",
+  "data": []
+}
+```
+
 ## Get request: percent fee rebate when trading with a code
+What is the rebate I get as a trader per fees paid?
+
 http://127.0.0.1:8000/code-rebate?code=DOUBLE_AG
 
 Response:
@@ -23,13 +147,19 @@ The rebate is in percent, that is, 0.01 corresponds to 0.01% of the broker-fees
 that will be rebated to traders that use this code
 
 ## Get request: percent fee passed-on to agency or referrer
+How much fees can I distribute as an agency or referrer?
 
 http://127.0.0.1:8000/refer-cut?addr=0x0ab6527027ecff1144dec3d78154fce309ac838c
 
-A referrer without agency will have a fee rebate that is determined by their token
-holdings.
+A referrer without agency will have a fee rebate that is determined by their token holdings.
 
-`{"type":"refer-cut", "data":{"passed_on_percent": 25.1}}`
+```
+{"type":"refer-cut", "data":{"isAgency":false, "passed_on_percent": 2.5}}
+```
+```
+{"type":"refer-cut", "data":{"isAgency":true, "passed_on_percent": 4.000000000000001}}
+```
+
 The rebate is in percent, that is, 25.1 corresponds to 25.1% of the broker-fees
 that were earned with all downstream referrals (downstream from the given address)  
 are passed to the given agency/referral. Example: if the agency has 2 codes
@@ -43,22 +173,24 @@ how much volume will be generated by the different codes downstream.
 `http://127.0.0.1:8000/earnings?addr=0x5A09217F6D36E73eE5495b430e889f8c57876Ef3`
 
 Available for any participant.
-
 ```
-[
-  {
-    "poolId": 1,
-    "code": "DEFAULT",
-    "earnings": 84.5672473711144,
-    "tokenName": "MATIC"
-  },
-  {
-    "poolId": 2,
-    "code": "DEFAULT",
-    "earnings": 94.731112,
-    "tokenName": "USDC"
-  }
-]
+{
+  "type": "earnings",
+  "data": [
+    {
+      "poolId": 1,
+      "code": "DEFAULT",
+      "earnings": 84.5672473711144,
+      "tokenName": "MATIC"
+    },
+    {
+      "poolId": 2,
+      "code": "DEFAULT",
+      "earnings": 94.731112,
+      "tokenName": "USDC"
+    }
+  ]
+}
 ```
 ## Get request: open payments for traders
 
@@ -66,23 +198,29 @@ http://127.0.0.1:8000/open-pay?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae3
 
 ```
 {
-  "code": "THUANBX",
-  "openEarnings": [
-    {
-      "poolId": 1,
-      "earnings": 0.0462833056659814,
-      "tokenName": "MATIC"
-    },
-    {
-      "poolId": 2,
-      "earnings": 0.0260464926019897,
-      "tokenName": "USDC"
-    }
-  ]
+  "type": "open-pay",
+  "data": {
+    "code": "THUANBX",
+    "openEarnings": [
+      {
+        "poolId": 1,
+        "earnings": 1.85133222663926,
+        "tokenName": "MATIC"
+      },
+      {
+        "poolId": 2,
+        "earnings": 1.04185970407959,
+        "tokenName": "USDC"
+      }
+    ]
+  }
 }
 ```
-
-## Select a referral code as a trader
+Error:
+```
+{"error":"Incorrect 'addr' parameter"}
+```
+## Post: Select a referral code as a trader
 
 http://127.0.0.1:8000/select-code
 
@@ -107,7 +245,7 @@ Error:
 `{"error":"code selection failed:Code already selected"}`
 `{"error":"code selection failed:Failed"}``
 
-## Update or create a code (anyone can be referrer)
+## Post: Update or create a code (anyone can be referrer)
 
 http://127.0.0.1:8000/upsert-code
 
@@ -134,7 +272,7 @@ Error:
 {"error":"code upsert failed:Not code owner"}
 ```
 
-## Refer
+## Post: Refer
 /refer
 passOnPercTDF is two-digit format, for example, 2.5% is sent as 250, 65% as 6500
 
@@ -181,30 +319,6 @@ new:
 2) identify all codes that are issued by these addresses
 3) continue as the old query
 
-## ok: open-trader-rebate
-
-
-## ok: agency-rebate
-Now same as referral-rebate
-
-## ok: referral-rebate
-Queries how much rebate the referrer gets for the given token holding amount or with their agency
--> referral not in referral_chain, based on token holdings
--> referral as child in token_chain, find queue
-
-## ok: my-referral-codes
-
-## done: select-referral-code
-
-## done: refer
-as agency or broker (child in referral-chain or broker) we can add a new child.
-the child (refer to address) is not allowed to be already in the quueue
-This needs to be signed by the agency/broker and we need to check the signature
--Edit?
-
-- done: upsert-referral-code
-Anyone can create a code. The parent is either a child in the referral_chain, or
-the broker
 
 ## Contracts
 Generate the ABI:

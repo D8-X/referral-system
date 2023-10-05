@@ -241,7 +241,7 @@ func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		return
 	}
 	addr = strings.ToLower(addr)
-	cut, err := app.CutPercentageAgency(addr)
+	cut, isAgency, err := app.CutPercentageAgency(addr)
 	if err != nil {
 		errMsg := err.Error()
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
@@ -249,7 +249,8 @@ func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	}
 	// Write the JSON response
 	stringValue := strconv.FormatFloat(cut, 'f', -1, 64)
-	jsonResponse := `{"type":"refer-cut", "data":{"passed_on_percent": ` + stringValue + `}}`
+	jsonResponse := `{"type":"refer-cut", "data":{"isAgency":` +
+		strconv.FormatBool(isAgency) + `, "passed_on_percent": ` + stringValue + `}}`
 	w.Write([]byte(jsonResponse))
 }
 
@@ -268,8 +269,9 @@ func onEarnings(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
 		return
 	}
+	response := utils.APIResponse{Type: "earnings", Data: res}
 	// Marshal the struct into JSON
-	jsonResponse, err := json.Marshal(res)
+	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		slog.Error("onEarnings unable to marshal response" + err.Error())
 		errMsg := "Unavailable"
@@ -325,16 +327,51 @@ func onOpenPay(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
 		return
 	}
+
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	response := utils.APIResponse{Type: "open-pay", Data: res}
 	// Marshal the struct into JSON
-	jsonResponse, err := json.Marshal(res)
+	jsonResponse, err := json.Marshal(response)
 	if err != nil {
-		slog.Error("onOpenPay unable to marshal response" + err.Error())
+		slog.Error("earnings unable to marshal response" + err.Error())
 		errMsg := "Unavailable"
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
 		return
 	}
+	// Write the JSON response
+	w.Write(jsonResponse)
+}
+
+func onMyReferrals(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	addr := r.URL.Query().Get("addr")
+	if addr == "" || !isValidEvmAddr(addr) {
+		errMsg := "Incorrect 'addr' parameter"
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	addr = strings.ToLower(addr)
+	ref, err := app.DbGetMyReferrals(addr)
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+
 	// Set the Content-Type header to application/json
 	w.Header().Set("Content-Type", "application/json")
 	// Write the JSON response
+	if ref == nil {
+		ref = []utils.APIResponseMyReferrals{}
+	}
+	response := utils.APIResponse{Type: "my-referrals", Data: ref}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		slog.Error("onMyReferrals unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
 	w.Write(jsonResponse)
 }

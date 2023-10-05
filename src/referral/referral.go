@@ -302,10 +302,11 @@ func (a *App) SavePayments() error {
 
 // DbGetReferralChainFromChild returns the percentage of trader
 // fees earned by an agency
-func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChild, error) {
+func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChild, bool, error) {
 	child = strings.ToLower(child)
 	var chain []DbReferralChainOfChild
-	if a.IsAgency(child) {
+	isAg := a.IsAgency(child)
+	if isAg {
 		var row DbReferralChainOfChild
 		query := "WITH RECURSIVE child_to_root AS (" +
 			"SELECT child, parent, pass_on, 1 AS lvl " +
@@ -322,7 +323,7 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 		rows, err := a.Db.Query(query)
 		defer rows.Close()
 		if err != nil {
-			return []DbReferralChainOfChild{}, err
+			return []DbReferralChainOfChild{}, isAg, err
 		}
 		var currentPassOn float64 = 1.0
 		for rows.Next() {
@@ -334,7 +335,7 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 			chain = append(chain, row)
 			fmt.Println(row)
 		}
-		return chain, nil
+		return chain, isAg, nil
 	}
 
 	// referrer without agency, we calculate the rebate based
@@ -349,7 +350,7 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 	err := a.Db.QueryRow(query, child, a.Settings.TokenX.Address).Scan(&cut)
 	if err != nil {
 		slog.Error("Error for CutPercentageAgency address " + child)
-		return []DbReferralChainOfChild{}, errors.New("Could not get percentage")
+		return []DbReferralChainOfChild{}, isAg, errors.New("Could not get percentage")
 	}
 	cut = cut / 100
 	var el = DbReferralChainOfChild{
@@ -362,19 +363,19 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 	}
 	chain = append(chain, el)
 
-	return chain, nil
+	return chain, isAg, nil
 }
 
 // Cut percentage returns how much % (1% is represented as 1) of the broker fees
 // trickle down to this agency or referrer address
-func (a *App) CutPercentageAgency(addr string) (float64, error) {
+func (a *App) CutPercentageAgency(addr string) (float64, bool, error) {
 	addr = strings.ToLower(addr)
-	chain, err := a.DbGetReferralChainFromChild(addr)
+	chain, isAg, err := a.DbGetReferralChainFromChild(addr)
 	if err != nil {
 		slog.Error("Error for CutPercentageAgency address " + addr)
-		return 0, errors.New("Could not get percentage")
+		return 0, false, errors.New("Could not get percentage")
 	}
-	return 100 * chain[len(chain)-1].ChildAvail, nil
+	return 100 * chain[len(chain)-1].ChildAvail, isAg, nil
 
 }
 
@@ -391,7 +392,7 @@ func (a *App) CutPercentageCode(code string) (float64, error) {
 		slog.Error("Error for CutPercentageCode code " + code)
 		return 0, errors.New("Could not identify code")
 	}
-	passOnCut, err := a.CutPercentageAgency(refAddr)
+	passOnCut, _, err := a.CutPercentageAgency(refAddr)
 	if err != nil {
 		slog.Error("Error for CutPercentageCode code " + code)
 		return 0, errors.New("Could not identify cut")
@@ -447,7 +448,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 // HasLoopOnChainAddition returns true if when adding the new child to the
 // referral chain, there would be a loop
 func (a *App) HasLoopOnChainAddition(parent string, newChild string) (bool, error) {
-	chain, err := a.DbGetReferralChainFromChild(parent)
+	chain, _, err := a.DbGetReferralChainFromChild(parent)
 	if err != nil {
 		return true, err
 	}
@@ -693,4 +694,28 @@ func (a *App) DbGetActiveReferrers() ([]string, []time.Time, error) {
 		lastUpdts = append(lastUpdts, ts)
 	}
 	return refAddr, lastUpdts, nil
+}
+
+func (a *App) DbGetMyReferrals(addr string) ([]utils.APIResponseMyReferrals, error) {
+	// as agency select downstream partners and pass-on
+	query := `select child, pass_on as pass_on_perc
+			   from referral_chain rc 
+			  where lower(rc.parent) = $1
+				union -- as referrer:
+			  select code as child, trader_rebate_perc as pass_on_perc
+				from referral_code 
+				where lower(referrer_addr) = $1`
+	rows, err := a.Db.Query(query, addr)
+	defer rows.Close()
+	if err != nil {
+		slog.Error("Error in DbGetMyReferrals: " + err.Error())
+		return []utils.APIResponseMyReferrals{}, errors.New("failed to get referrals")
+	}
+	var res []utils.APIResponseMyReferrals
+	for rows.Next() {
+		var el utils.APIResponseMyReferrals
+		rows.Scan(&el.Referral, &el.PassOnPerc)
+		res = append(res, el)
+	}
+	return res, nil
 }

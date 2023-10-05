@@ -39,3 +39,13 @@ type APIResponseOpenEarnings struct {
 	Code    string    `json:"code"`
 	OpenPay []OpenPay `json:"openEarnings"`
 }
+
+type APIResponseMyReferrals struct {
+	Referral   string  `json:"referral"`
+	PassOnPerc float64 `json:"passOnPerc"`
+}
+
+type APIResponse struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}

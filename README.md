@@ -266,6 +266,27 @@ Error:
 `{"error":"code selection failed:Code already selected"}`
 `{"error":"code selection failed:Failed"}``
 
+
+<details>
+
+<summary>SDK</summary>
+
+Select a referral code as a trader
+```
+let rc: APIReferralCodeSelectionPayload;
+rc = {
+    code: "ABCD",
+    traderAddr: wallet.address,
+    createdOn: 1696166434,
+    signature: "",
+  };
+codeSigner = new ReferralCodeSigner(pk, wallet.address, RPC);
+rc.signature = = await codeSigner.getSignatureForCodeSelection(rc);
+```
+</details>
+
+
+
 ## Post: Update or create a code (anyone can be referrer)
 
 http://127.0.0.1:8000/upsert-code
@@ -293,6 +314,24 @@ Error:
 {"error":"code upsert failed:Not code owner"}
 ```
 
+<details>
+
+<summary>SDK</summary>
+
+```
+let rp: APIReferralCodePayload;
+let rcp: APIReferralCodePayload = {
+      code: "ABCD",
+      referrerAddr: wallet.address,
+      createdOn: 1696166434,
+      passOnPercTDF: 333,
+      signature: "",
+    };
+codeSigner = new ReferralCodeSigner(pk, wallet.address, RPC);
+rcp.signature = await codeSigner.getSignatureForNewCode(rcp);
+```
+</details>
+
 ## Post: Refer
 /refer
 passOnPercTDF is two-digit format, for example, 2.5% is sent as 250, 65% as 6500
@@ -319,6 +358,23 @@ Error:
 only one occurrence as child allowed:
 `{"error":"referral failed:Refer to addr already in use"}`
 `{"error":"referral failed:Not an agency"}`
+
+<details>
+
+<summary>SDK</summary>
+
+```
+let rp: APIReferPayload = {
+      parentAddr: wallet.address,
+      referToAddr: "0x863ad9ce46acf07fd9390147b619893461036194",
+      passOnPercTDF: 225,
+      createdOn: 1696166434,
+      signature: "",
+    };
+codeSigner = new ReferralCodeSigner(pk, wallet.address, RPC);
+rp.signature= await codeSigner.getSignatureForNewReferral(rp);
+```
+</details>
 
 
 

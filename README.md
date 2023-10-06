@@ -269,7 +269,7 @@ Error:
 
 <details>
 
-<summary>SDK</summary>
+<summary>Node SDK (>=0.9.7) </summary>
 
 Select a referral code as a trader
 ```
@@ -316,7 +316,7 @@ Error:
 
 <details>
 
-<summary>SDK</summary>
+<summary>Node SDK (>=0.9.7) </summary>
 
 ```
 let rp: APIReferralCodePayload;
@@ -361,7 +361,7 @@ only one occurrence as child allowed:
 
 <details>
 
-<summary>SDK</summary>
+<summary>Node SDK (>=0.9.7) </summary>
 
 ```
 let rp: APIReferPayload = {
@@ -382,3 +382,9 @@ rp.signature= await codeSigner.getSignatureForNewReferral(rp);
 Generate the ABI:
 `abigen --abi src/contracts/abi/MultiPay.json --pkg contracts --type MultiPay --out multi_pay.go`
 `abigen --abi src/contracts/abi/ERC20.json --pkg contracts --type Erc20 --out erc20.go`
+
+## Docker
+```
+docker build -t referrer -f cmd/Dockerfile .
+
+```

@@ -4,15 +4,16 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
+	"log"
 	"log/slog"
 	"math/big"
-	"net/http"
 	"referral-system/env"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/go-resty/resty/v2"
 	"github.com/spf13/viper"
 )
 
@@ -58,20 +59,25 @@ func (exc *RemotePayExec) Init(viper *viper.Viper) error {
 		return err
 	}
 	exc.ExecPrivKey = pk
-	// remote broker address via http
-	resp, err := http.Get(addr + "/broker-address")
+	// remote broker address
+	client := resty.New()
+	// Make the GET request
+	resp, err := client.R().
+		EnableTrace().
+		Get(addr + "/broker-address")
+
 	if err != nil {
-		return err
+		log.Fatalf("Error: %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("unexpected status code: " + strconv.Itoa(resp.StatusCode))
+	if resp.StatusCode() != 200 {
+		return errors.New("unexpected status code: " + strconv.Itoa(resp.StatusCode()))
 	}
 	type BrokerResp struct {
 		BrokerAddr string `json:"brokerAddr"`
 	}
 	var apiResponse BrokerResp
-	err = json.NewDecoder(resp.Body).Decode(&apiResponse)
+	respBody := resp.String()
+	err = json.Unmarshal([]byte(respBody), &apiResponse)
 	if err != nil {
 		return err
 	}

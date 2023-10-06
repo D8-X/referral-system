@@ -282,7 +282,12 @@ func (a *App) DbGetMarginTkn() error {
 // SavePayments gets the payment events from on-chain and
 // updates or inserts database entries
 func (a *App) SavePayments() error {
-	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient)
+	tsStart := time.Now().Unix() - int64(a.Settings.PaymentMaxLookBackDays*86400)
+	lookBackBlock, _, err := contracts.FindBlockWithTs(a.RpcClient, uint64(tsStart))
+	if err != nil {
+		lookBackBlock = 0
+	}
+	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient, lookBackBlock)
 	if err != nil {
 		return err
 	}

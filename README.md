@@ -3,11 +3,9 @@ Referral system
 
 # Todos
 
-- mycodes as referrer 
-  (what does referrer get, what does trader get)
-- agency: code/partner
+- [x] agency: code/partner
 - max 10 agencies
-- walk back in time block-time for historical payments
+- [x] walk back in time block-time for historical payments
 - edit referral percentages as an agency?
 - schedule payment time
 - fool-proof loops/cycles in chain

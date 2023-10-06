@@ -72,11 +72,11 @@ func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) 
 	return bal, err
 }
 
-func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client) ([]PaymentLog, error) {
+func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock uint64) ([]PaymentLog, error) {
 	// Create an event iterator for the MultiPayPayment events
 	opts := &bind.FilterOpts{
-		Start:   0,   // Starting block number
-		End:     nil, // Ending block (nil for latest)
+		Start:   startBlock, // Starting block number
+		End:     nil,        // Ending block (nil for latest)
 		Context: context.Background(),
 	}
 	multiPayPaymentIterator, err := ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})

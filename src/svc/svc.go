@@ -30,7 +30,7 @@ func Run() {
 	}
 
 	// Run migrations on startup
-	if err := runMigrations(v.GetString(env.DATABASE_DSN_HISTORY)); err != nil {
+	if err := runMigrations(v.GetString(env.DATABASE_DSN_HISTORY)); err != nil && err != migrate.ErrNoChange {
 		slog.Error("running migrations", "error", err)
 		os.Exit(1)
 	} else {

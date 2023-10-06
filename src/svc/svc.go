@@ -52,7 +52,7 @@ func Run() {
 		return
 	}
 	nxt := utils.NextPaymentSchedule(app.Settings.PayCronSchedule)
-	slog.Info("Next payment due on " + nxt.Format("UnixDate"))
+	slog.Info("Next payment due on " + nxt.Format("2006-January-02 15:04:05"))
 	app.SavePayments()
 	err = app.DbGetMarginTkn()
 	if err != nil {

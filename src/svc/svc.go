@@ -1,6 +1,8 @@
 package svc
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -14,7 +16,6 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	// _ "github.com/lib/pq"
 	"github.com/spf13/viper"
 )
 
@@ -29,23 +30,31 @@ func Run() {
 		log.Fatal(err)
 	}
 
-	// Run migrations on startup
-	if err := runMigrations(v.GetString(env.DATABASE_DSN_HISTORY)); err != nil {
+	var app referral.App
+	s := v.GetString(env.REMOTE_BROKER_HTTP)
+	slog.Info("remote broker", "url", s)
+
+	// connect db before running migrations
+	if err := app.ConnectDB(v.GetString(env.DATABASE_DSN_HISTORY)); err != nil {
+		slog.Error("connecting to db", "error", err)
+		return
+	}
+
+	// Run migrations on startup. If migrations fail - exit.
+	if err := runMigrations(v.GetString(env.DATABASE_DSN_HISTORY), app.Db); err != nil {
 		slog.Error("running migrations", "error", err)
 		os.Exit(1)
+		return
 	} else {
 		slog.Info("migrations run completed")
 	}
-
-	var app referral.App
-	s := v.GetString(env.REMOTE_BROKER_HTTP)
-	fmt.Print(s)
 
 	err = app.New(v)
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
 	}
+
 	app.SavePayments()
 	err = app.DbGetMarginTkn()
 	if err != nil {
@@ -88,7 +97,26 @@ func loadEnv() (*viper.Viper, error) {
 	return v, nil
 }
 
-func runMigrations(postgresDSN string) error {
+func runMigrations(postgresDSN string, dbInstance *sql.DB) error {
+	// HACK: we want to run migrations only when history tables are present.
+	// Otherwise referral migrations will fail and loop on being marked as dirty
+	// on service restarts.
+	res, err := dbInstance.Query("select exists (select * from pg_tables where tablename= 'trades_history')")
+	if err != nil {
+		return fmt.Errorf("querying history tables existence: %w", err)
+	}
+	historyTablesExist := false
+	res.Next()
+	if err := res.Scan(&historyTablesExist); err != nil {
+		return fmt.Errorf("scanning history tables existence result: %w", err)
+	}
+
+	if !historyTablesExist {
+		return errors.New("history tables do not exist, skipping migrations")
+	}
+
+	slog.Info("history tables exist, running migrations...")
+
 	source, err := iofs.New(db.MigrationsFS, "migrations")
 	if err != nil {
 		return err
@@ -101,5 +129,19 @@ func runMigrations(postgresDSN string) error {
 	if err != nil {
 		return err
 	}
-	return m.Up()
+	if err := m.Up(); err != nil {
+		// Only return error if it's not "no change" error
+		if err.Error() != "no change" {
+			return err
+		}
+	}
+
+	e1, e2 := m.Close()
+	if e1 != nil {
+		return e1
+	}
+	if e2 != nil {
+		return e2
+	}
+	return nil
 }

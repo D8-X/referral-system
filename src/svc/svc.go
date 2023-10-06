@@ -73,6 +73,7 @@ func loadEnv() (*viper.Viper, error) {
 	requiredEnvs := []string{
 		env.DATABASE_DSN_HISTORY,
 		env.CONFIG_PATH,
+		env.RPC_URL_PATH,
 		env.BROKER_KEY,
 		env.API_BIND_ADDR,
 		env.API_PORT,

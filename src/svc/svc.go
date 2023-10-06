@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"os"
 	"referral-system/env"
 	"referral-system/src/api"
 	"referral-system/src/db"
@@ -31,8 +32,9 @@ func Run() {
 	// Run migrations on startup
 	if err := runMigrations(v.GetString(env.DATABASE_DSN_HISTORY)); err != nil {
 		slog.Error("running migrations", "error", err)
+		os.Exit(1)
 	} else {
-		slog.Info("migration run completed")
+		slog.Info("migrations run completed")
 	}
 
 	var app referral.App

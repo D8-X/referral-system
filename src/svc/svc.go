@@ -11,6 +11,7 @@ import (
 	"referral-system/src/api"
 	"referral-system/src/db"
 	"referral-system/src/referral"
+	"referral-system/src/utils"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -54,7 +55,12 @@ func Run() {
 		slog.Error("Error:" + err.Error())
 		return
 	}
-
+	if !utils.IsValidPaymentSchedule(app.Settings.PayCronSchedule) {
+		slog.Error("Error: paymentScheduleCron not a valid CRON-expression")
+		return
+	}
+	nxt := utils.NextPaymentSchedule(app.Settings.PayCronSchedule)
+	slog.Info("Next payment due on " + nxt.Format("2006-January-02 15:04:05"))
 	app.SavePayments()
 	err = app.DbGetMarginTkn()
 	if err != nil {

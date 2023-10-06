@@ -6,9 +6,14 @@ import (
 	"log/slog"
 	"referral-system/env"
 	"referral-system/src/api"
+	"referral-system/src/db"
 	"referral-system/src/referral"
 
-	_ "github.com/lib/pq"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+
+	// _ "github.com/lib/pq"
 	"github.com/spf13/viper"
 )
 
@@ -21,6 +26,13 @@ func Run() {
 	if err != nil {
 		// Handle the error
 		log.Fatal(err)
+	}
+
+	// Run migrations on startup
+	if err := runMigrations(v.GetString(env.DATABASE_DSN_HISTORY)); err != nil {
+		slog.Error("running migrations", "error", err)
+	} else {
+		slog.Info("migration run completed")
 	}
 
 	var app referral.App
@@ -71,4 +83,20 @@ func loadEnv() (*viper.Viper, error) {
 	}
 
 	return v, nil
+}
+
+func runMigrations(postgresDSN string) error {
+	source, err := iofs.New(db.MigrationsFS, "migrations")
+	if err != nil {
+		return err
+	}
+	m, err := migrate.NewWithSourceInstance(
+		"MigrationsFS",
+		source,
+		postgresDSN,
+	)
+	if err != nil {
+		return err
+	}
+	return m.Up()
 }

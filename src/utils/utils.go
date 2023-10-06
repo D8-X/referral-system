@@ -1,5 +1,11 @@
 package utils
 
+import (
+	"time"
+
+	"github.com/adhocore/gronx"
+)
+
 type APICodeSelectionPayload struct {
 	Code       string `json:"code"`
 	TraderAddr string `json:"traderAddr"`
@@ -49,4 +55,19 @@ type APIResponseMyReferrals struct {
 type APIResponse struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`
+}
+
+func IsValidPaymentSchedule(expr string) bool {
+	gron := gronx.New()
+	return gron.IsValid(expr)
+}
+
+func NextPaymentSchedule(expr string) time.Time {
+	nextTime, _ := gronx.NextTick(expr, true)
+	return nextTime
+}
+
+func PrevPaymentSchedule(expr string) time.Time {
+	nextTime, _ := gronx.NextTick(expr, true)
+	return nextTime
 }

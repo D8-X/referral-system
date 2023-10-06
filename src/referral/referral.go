@@ -33,7 +33,7 @@ type App struct {
 
 type Settings struct {
 	PaymentMaxLookBackDays int    `json:"paymentMaxLookBackDays"`
-	PayCronSchedule        string `json:"paymentScheduleMinHourDayofmonthWeekday"`
+	PayCronSchedule        string `json:"paymentScheduleCron"`
 	MultiPayContractAddr   string `json:"multiPayContractAddr"`
 	TokenX                 struct {
 		Address  string `json:"address"`

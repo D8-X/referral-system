@@ -63,11 +63,11 @@ func IsValidPaymentSchedule(expr string) bool {
 }
 
 func NextPaymentSchedule(expr string) time.Time {
-	nextTime, _ := gronx.NextTick(expr, true)
-	return nextTime
+	time, _ := gronx.NextTick(expr, true)
+	return time
 }
 
 func PrevPaymentSchedule(expr string) time.Time {
-	nextTime, _ := gronx.NextTick(expr, true)
-	return nextTime
+	time, _ := gronx.PrevTick(expr, true)
+	return time
 }

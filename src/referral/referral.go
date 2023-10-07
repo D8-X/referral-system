@@ -745,3 +745,35 @@ func (a *App) DbGetMyCodeSelection(addr string) (string, error) {
 	}
 	return code, nil
 }
+
+// DbSetPaymentExecFinished sets the batch number and value for hasFinished
+// When a payment execution starts, we set a new batch number and set the
+// batch_finished status to false. Once done, we set the status to true
+func (a *App) DbSetPaymentExecFinished(batchTs string, hasFinished bool) error {
+	hasFinishedStr := strconv.FormatBool(hasFinished)
+	query := `INSERT INTO referral_settings (property, value)
+	VALUES ($1, $2),
+		   ($3, $4)
+	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
+	_, err := a.Db.Exec(query, "batch_timestamp", batchTs, "batch_finished", hasFinishedStr)
+	if err != nil {
+		slog.Error("DbSetPaymentExecFinished:" + err.Error())
+		return err
+	}
+	return nil
+}
+
+func (a *App) DbGetPaymentExecHasFinished() (bool, error) {
+	query := `SELECT value FROM referral_settings rs
+			WHERE rs.property='batch_finished'`
+	var hasFinished string
+	err := a.Db.QueryRow(query).Scan(&hasFinished)
+	if err == sql.ErrNoRows {
+		return true, nil
+	}
+	if err != nil {
+		slog.Error("DbGetPaymentExecHasFinished:" + err.Error())
+		return true, err
+	}
+	return hasFinished == "true", nil
+}

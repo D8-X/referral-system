@@ -1,6 +1,7 @@
 package referral
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -89,17 +90,87 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 	return res, nil
 }
 
+func (a *App) SchedulePayment() {
+	// Define the timestamp when the task is due (replace with your timestamp)
+	dueTimestamp := utils.NextPaymentSchedule(a.Settings.PayCronSchedule)
+	durUntilDue := dueTimestamp.Sub(time.Now())
+
+	go func() {
+		slog.Info("Waiting for " + durUntilDue.String() + " until next payment is due...")
+		time.Sleep(durUntilDue)
+
+		// Execute
+		fmt.Println("Payment is now due, executing...")
+		err := a.ProcessAllPayments()
+		if err != nil {
+			slog.Error("Error when processing payments:" + err.Error())
+		}
+	}()
+}
+
+func (a *App) IsPaymentDue() bool {
+	hasFinished, batchTime := a.dbGetPayBatch()
+	if !hasFinished {
+		return false
+	}
+	ts := time.Unix(batchTime, 0)
+	prevTime := utils.PrevPaymentSchedule(a.Settings.PayCronSchedule)
+	slog.Info("Last payment due  time: " + prevTime.Format("2006-01-02 15:04:05"))
+	slog.Info("Last payment exec time: " + ts.Format("2006-01-02 15:04:05"))
+
+	return prevTime.After(ts)
+}
+
+// dbGetPayBatch returns hasFinished and if yes the
+// batch number
+func (a *App) dbGetPayBatch() (bool, int64) {
+	query := `SELECT value FROM referral_settings rs
+	WHERE rs.property='batch_finished'`
+
+	var hasFinishedStr string
+	err := a.Db.QueryRow(query).Scan(&hasFinishedStr)
+	if err == sql.ErrNoRows {
+		return true, 0
+	}
+
+	var ts string
+	query = `SELECT value FROM referral_settings rs
+		WHERE rs.property='batch_timestamp'`
+	err = a.Db.QueryRow(query).Scan(&ts)
+	if err != nil {
+		return true, 0
+	}
+	time, _ := strconv.Atoi(ts)
+	return hasFinishedStr == "true", int64(time)
+}
+
 // ProcessAllPayments determins how much to pay and ultimately delegates
 // payment execution to payexec
 func (a *App) ProcessAllPayments() error {
+	// determine batch timestamp
+	var batchTs string
+
+	hasFinished, batchTime := a.dbGetPayBatch()
+	if !hasFinished {
+		// continue payment execution
+		batchTs = fmt.Sprintf("%d", batchTime)
+	} else {
+		// register intend to start
+		// payment batch in database
+		currentTime := time.Now().Unix()
+		batchTs = fmt.Sprintf("%d", currentTime)
+		err := a.DbSetPaymentExecFinished(batchTs, false)
+		if err != nil {
+			return err
+		}
+	}
+
 	// update token holdings
 	err := a.DbUpdateTokenHoldings()
 	if err != nil {
 		return errors.New("ProcessAllPayments: Failed to update token holdings " + err.Error())
 	}
 	// query snapshot of open pay view
-	currentTime := time.Now().Unix()
-	batchTs := fmt.Sprintf("%d", currentTime)
 	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 
 				agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
 				mti.token_addr, mti.token_decimals
@@ -135,6 +206,12 @@ func (a *App) ProcessAllPayments() error {
 		// process
 		a.processPayment(el, codePaths[el.Code], batchTs)
 	}
+	err = a.DbSetPaymentExecFinished(batchTs, true)
+	if err != nil {
+		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
+	}
+	// schedule next payments
+	a.SchedulePayment()
 	return nil
 }
 

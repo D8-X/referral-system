@@ -306,8 +306,10 @@ func (a *App) SavePayments() error {
 }
 
 // DbGetReferralChainFromChild returns the percentage of trader
-// fees earned by an agency
-func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChild, bool, error) {
+// fees earned by an agency.
+// Holdings are relevant for pure referrers only. The fees for pure referrers
+// are calculated conditionally to this number
+func (a *App) DbGetReferralChainFromChild(child string, holdings *big.Int) ([]DbReferralChainOfChild, bool, error) {
 	child = strings.ToLower(child)
 	var chain []DbReferralChainOfChild
 	isAg := a.IsAgency(child)
@@ -350,9 +352,9 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 			LEFT join referral_token_holdings rth 
 			on lower(rth.referrer_addr) = $1
 			WHERE LOWER(rsc.token_addr)= $2
-			AND rsc.holding_amount_dec_n<=coalesce(0, rth.holding_amount_dec_n)`
+			AND rsc.holding_amount_dec_n<=coalesce($3, rth.holding_amount_dec_n)`
 	var cut float64
-	err := a.Db.QueryRow(query, child, a.Settings.TokenX.Address).Scan(&cut)
+	err := a.Db.QueryRow(query, child, a.Settings.TokenX.Address, holdings.String()).Scan(&cut)
 	if err != nil {
 		slog.Error("Error for CutPercentageAgency address " + child)
 		return []DbReferralChainOfChild{}, isAg, errors.New("Could not get percentage")
@@ -373,9 +375,9 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 
 // Cut percentage returns how much % (1% is represented as 1) of the broker fees
 // trickle down to this agency or referrer address
-func (a *App) CutPercentageAgency(addr string) (float64, bool, error) {
+func (a *App) CutPercentageAgency(addr string, holdingsDecN *big.Int) (float64, bool, error) {
 	addr = strings.ToLower(addr)
-	chain, isAg, err := a.DbGetReferralChainFromChild(addr)
+	chain, isAg, err := a.DbGetReferralChainFromChild(addr, holdingsDecN)
 	if err != nil {
 		slog.Error("Error for CutPercentageAgency address " + addr)
 		return 0, false, errors.New("Could not get percentage")
@@ -397,7 +399,9 @@ func (a *App) CutPercentageCode(code string) (float64, error) {
 		slog.Error("Error for CutPercentageCode code " + code)
 		return 0, errors.New("Could not identify code")
 	}
-	passOnCut, _, err := a.CutPercentageAgency(refAddr)
+
+	h := new(big.Int).SetInt64(0)
+	passOnCut, _, err := a.CutPercentageAgency(refAddr, h)
 	if err != nil {
 		slog.Error("Error for CutPercentageCode code " + code)
 		return 0, errors.New("Could not identify cut")
@@ -453,7 +457,9 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 // HasLoopOnChainAddition returns true if when adding the new child to the
 // referral chain, there would be a loop
 func (a *App) HasLoopOnChainAddition(parent string, newChild string) (bool, error) {
-	chain, _, err := a.DbGetReferralChainFromChild(parent)
+
+	h := new(big.Int).SetInt64(0)
+	chain, _, err := a.DbGetReferralChainFromChild(parent, h)
 	if err != nil {
 		return true, err
 	}
@@ -776,4 +782,21 @@ func (a *App) DbGetPaymentExecHasFinished() (bool, error) {
 		return true, err
 	}
 	return hasFinished == "true", nil
+}
+
+func (a *App) DbGetTokenInfo() (utils.APIResponseTokenHoldings, error) {
+	query := `select cut_perc, holding_amount_dec_n/power(10, $1) as holding, token_addr from referral_setting_cut rsc`
+	rows, err := a.Db.Query(query, a.Settings.TokenX.Decimals)
+	defer rows.Close()
+	if err != nil {
+		slog.Error("Error in DbGetTokenInfo: " + err.Error())
+		return utils.APIResponseTokenHoldings{}, errors.New("failed to get token info")
+	}
+	var res utils.APIResponseTokenHoldings
+	for rows.Next() {
+		var el utils.APIRebate
+		rows.Scan(&el.CutPerc, &el.Holding, &res.TokenAddr)
+		res.Rebates = append(res.Rebates, el)
+	}
+	return res, nil
 }

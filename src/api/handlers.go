@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"referral-system/env"
 	"referral-system/src/referral"
@@ -241,7 +242,14 @@ func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		return
 	}
 	addr = strings.ToLower(addr)
-	cut, isAgency, err := app.CutPercentageAgency(addr)
+	// optional:
+	h := r.URL.Query().Get("holdings")
+	holdings := new(big.Int).SetInt64(0)
+	if h != "" {
+		holdings.SetString(h, 10)
+	}
+
+	cut, isAgency, err := app.CutPercentageAgency(addr, holdings)
 	if err != nil {
 		errMsg := err.Error()
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
@@ -399,6 +407,28 @@ func OnMyCodeSelection(w http.ResponseWriter, r *http.Request, app *referral.App
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		slog.Error("OnMyCodeSelection unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResponse)
+}
+
+func onTokenInfo(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	info, err := app.DbGetTokenInfo()
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	response := utils.APIResponse{Type: "token-info", Data: info}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		slog.Error("onTokenInfo unable to marshal response" + err.Error())
 		errMsg := "Unavailable"
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
 		return

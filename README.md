@@ -376,7 +376,7 @@ rp.signature= await codeSigner.getSignatureForNewReferral(rp);
 
 
 
-## Contracts
+## Dev: Contracts
 Generate the ABI:
 `abigen --abi src/contracts/abi/MultiPay.json --pkg contracts --type MultiPay --out multi_pay.go`
 `abigen --abi src/contracts/abi/ERC20.json --pkg contracts --type Erc20 --out erc20.go`

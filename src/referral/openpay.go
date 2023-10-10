@@ -270,7 +270,9 @@ func (a *App) DbGetReferralChainForCode(code string) ([]DbReferralChainOfChild, 
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}
 	traderCut = traderCut / 100
-	chain, _, err := a.DbGetReferralChainFromChild(refAddr)
+
+	h := new(big.Int).SetInt64(0)
+	chain, _, err := a.DbGetReferralChainFromChild(refAddr, h)
 	if err != nil {
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}

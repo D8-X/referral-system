@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"referral-system/env"
 	"referral-system/src/referral"
@@ -241,7 +242,14 @@ func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		return
 	}
 	addr = strings.ToLower(addr)
-	cut, isAgency, err := app.CutPercentageAgency(addr)
+	// optional:
+	h := r.URL.Query().Get("holdings")
+	holdings := new(big.Int).SetInt64(0)
+	if h != "" {
+		holdings.SetString(h, 10)
+	}
+
+	cut, isAgency, err := app.CutPercentageAgency(addr, holdings)
 	if err != nil {
 		errMsg := err.Error()
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)

@@ -150,6 +150,9 @@ How much fees can I distribute as an agency or referrer?
 http://127.0.0.1:8000/refer-cut?addr=0x0ab6527027ecff1144dec3d78154fce309ac838c
 
 A referrer without agency will have a fee rebate that is determined by their token holdings.
+Therefore they should call the API with the amount of tokens they hold:
+`http://127.0.0.1:8000/refer-cut?addr=0x0ab6527027ecff1144dec3d78154fce309ac838c&holdings=100000000000000000000000000`
+
 
 ```
 {"type":"refer-cut", "data":{"isAgency":false, "passed_on_percent": 2.5}}

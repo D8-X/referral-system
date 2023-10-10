@@ -350,7 +350,7 @@ func (a *App) DbGetReferralChainFromChild(child string) ([]DbReferralChainOfChil
 			LEFT join referral_token_holdings rth 
 			on lower(rth.referrer_addr) = $1
 			WHERE LOWER(rsc.token_addr)= $2
-			AND rsc.holding_amount_dec_n<=rth.holding_amount_dec_n`
+			AND rsc.holding_amount_dec_n<=coalesce(0, rth.holding_amount_dec_n)`
 	var cut float64
 	err := a.Db.QueryRow(query, child, a.Settings.TokenX.Address).Scan(&cut)
 	if err != nil {

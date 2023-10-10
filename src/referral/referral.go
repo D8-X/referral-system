@@ -777,3 +777,20 @@ func (a *App) DbGetPaymentExecHasFinished() (bool, error) {
 	}
 	return hasFinished == "true", nil
 }
+
+func (a *App) DbGetTokenInfo() (utils.APIResponseTokenHoldings, error) {
+	query := `select cut_perc, holding_amount_dec_n/power(10, $1) as holding, token_addr from referral_setting_cut rsc`
+	rows, err := a.Db.Query(query, a.Settings.TokenX.Decimals)
+	defer rows.Close()
+	if err != nil {
+		slog.Error("Error in DbGetTokenInfo: " + err.Error())
+		return utils.APIResponseTokenHoldings{}, errors.New("failed to get token info")
+	}
+	var res utils.APIResponseTokenHoldings
+	for rows.Next() {
+		var el utils.APIRebate
+		rows.Scan(&el.CutPerc, &el.Holding, &res.TokenAddr)
+		res.Rebates = append(res.Rebates, el)
+	}
+	return res, nil
+}

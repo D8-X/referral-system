@@ -52,6 +52,15 @@ type APIResponseMyReferrals struct {
 	PassOnPerc float64 `json:"passOnPerc"`
 }
 
+type APIRebate struct {
+	CutPerc float64 `json:"cutPerc"`
+	Holding float64 `json:"holding"`
+}
+type APIResponseTokenHoldings struct {
+	TokenAddr string      `json:"tokenAddr"`
+	Rebates   []APIRebate `json:"rebates"`
+}
+
 type APIResponse struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`

@@ -283,6 +283,23 @@ rc.signature = = await codeSigner.getSignatureForCodeSelection(rc);
 ```
 </details>
 
+## Get: rebates for referrers that are not an agency
+
+http://127.0.0.1:8000/token-info
+
+```
+{"type":"token-info",
+ "data":
+ {"tokenAddr":"0xe05b86c761c70beab72fbfe919e5260e956cab99",
+  "rebates":[
+    {"cutPerc":0.2,"holding":0},
+    {"cutPerc":1.5,"holding":100},
+    {"cutPerc":2.5,"holding":1000},
+    {"cutPerc":3.75,"holding":10000}
+  ]
+ }
+}
+```
 
 
 ## Post: Update or create a code (anyone can be referrer)

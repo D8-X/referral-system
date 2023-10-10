@@ -45,6 +45,11 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 		onCodeRebate(w, r, app)
 	})
 
+	// Endpoint: /code-rebate?code=ABCD
+	router.Get("/token-info", func(w http.ResponseWriter, r *http.Request) {
+		onTokenInfo(w, r, app)
+	})
+
 	router.Post("/select-code", func(w http.ResponseWriter, r *http.Request) {
 		onSelectCode(w, r, app)
 	})

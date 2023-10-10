@@ -405,3 +405,25 @@ func OnMyCodeSelection(w http.ResponseWriter, r *http.Request, app *referral.App
 	}
 	w.Write(jsonResponse)
 }
+
+func onTokenInfo(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	info, err := app.DbGetTokenInfo()
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	response := utils.APIResponse{Type: "token-info", Data: info}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		slog.Error("onTokenInfo unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResponse)
+}

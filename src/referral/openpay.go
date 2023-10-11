@@ -237,13 +237,14 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	payees[1] = a.Settings.BrokerPayoutAddr
 	// amount for parent is set to remainder so that we ensure
 	// totalDecN = sum of distributed amounts
-	amounts[1] = new(big.Int).Sub(totalDecN, distributed)
+	amounts[1] = new(big.Int).Set(totalDecN)
+	amounts[1].Sub(amounts[1], distributed)
 
 	// encode message: batchTs.<code>.<poolId>
 	msg := batchTs + "." + row.Code + "." + strconv.Itoa(int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
-	a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), amounts, payees, id, msg)
+	a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
 }
 
 // DbGetReferralChainForCode gets the entire chain of referrals

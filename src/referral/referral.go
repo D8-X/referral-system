@@ -108,39 +108,41 @@ type DbPayment struct {
 // New intantiates a referral app
 func (a *App) New(viper *viper.Viper) error {
 
-	// decide whether we have a local broker or a remote broker
-	if viper.GetString(env.REMOTE_BROKER_HTTP) == "" {
-		a.PaymentExecutor = &LocalPayExec{}
-	} else {
-		a.PaymentExecutor = &RemotePayExec{}
-	}
-	err := a.PaymentExecutor.Init(viper)
-	if err != nil {
-		return err
-	}
-
-	// connect db
-	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
-	err = a.ConnectDB(connStr)
-	if err != nil {
-		return err
-	}
 	// load settings
 	s, err := loadConfig(viper)
 	if err != nil {
 		return err
 	}
 	a.Settings = s
-	err = a.SettingsToDB()
-	if err != nil {
-		return err
-	}
 
 	rpcs, err := loadRPCConfig(viper)
 	if err != nil {
 		return err
 	}
 	a.Rpc = rpcs
+
+	// decide whether we have a local broker or a remote broker
+	if viper.GetString(env.REMOTE_BROKER_HTTP) == "" {
+		a.PaymentExecutor = &LocalPayExec{}
+	} else {
+		a.PaymentExecutor = &RemotePayExec{}
+	}
+	err = a.PaymentExecutor.Init(viper, a.Settings.MultiPayContractAddr)
+	if err != nil {
+		return err
+	}
+
+	// settings to database
+	err = a.SettingsToDB()
+	if err != nil {
+		return err
+	}
+	// connect db
+	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
+	err = a.ConnectDB(connStr)
+	if err != nil {
+		return err
+	}
 
 	err = a.CreateRpcClient()
 	if err != nil {

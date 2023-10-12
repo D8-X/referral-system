@@ -150,12 +150,12 @@ func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	if err != nil {
 		errMsg := `Wrong argument types. Usage:
 		{
-			'Code' : CODE1,
-			'ReferrerAddr' : '0xabc...' ,
-			'AgencyAddr' : '0xcbc...',
-			'CreatedOn' : 1696166434,
-			'PassOnPercTDF' : 5000,
-			'Signature' :  '0xa1ef...'
+			'code' : 'CODE1',
+			'referrerAddr' : '0xabc...' ,
+			'agencyAddr' : '0xcbc...',
+			'createdOn' : 1696166434,
+			'passOnPercTDF' : 5000,
+			'signature' :  '0xa1ef...'
 		}`
 		errMsg = strings.ReplaceAll(errMsg, "\t", "")
 		errMsg = strings.ReplaceAll(errMsg, "\n", "")

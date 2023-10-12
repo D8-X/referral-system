@@ -244,6 +244,7 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	msg := batchTs + "." + row.Code + "." + strconv.Itoa(int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
+	a.PaymentExecutor.SetClient(a.RpcClient)
 	a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
 }
 

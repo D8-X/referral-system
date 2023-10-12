@@ -297,10 +297,10 @@ func (a *App) SavePayments() error {
 		// key = trader_addr, payee_addr, pool_id, batch_timestamp
 		traderAddr := p.PayeeAddr[0].String()
 		for k, payee := range p.PayeeAddr {
-			if p.AmountDecN[k].BitLen() == 0 {
-				continue
+			result := p.AmountDecN[k].Cmp(big.NewInt(0))
+			if result != 0 {
+				a.writeDbPayment(traderAddr, payee.String(), p, k)
 			}
-			a.writeDbPayment(traderAddr, payee.String(), p, k)
 		}
 
 	}
@@ -475,9 +475,9 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
 	query := "SELECT tx_confirmed FROM referral_payment " +
-		"WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3"
+		"WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3 AND pool_id=$4"
 	var isConfirmed bool
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime).Scan(&isConfirmed)
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId).Scan(&isConfirmed)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, block_ts, tx_confirmed)

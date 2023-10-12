@@ -307,6 +307,31 @@ func (a *App) SavePayments() error {
 	return nil
 }
 
+// PurgeUnconfirmedPayments deletes records from the database that could not be
+// confirmed on-chain. Must run after 'SavePayments'
+func (a *App) PurgeUnconfirmedPayments() error {
+	query := `select distinct(tx_hash) from referral_payment rp 
+			where tx_confirmed = false;`
+	rows, err := a.Db.Query(query)
+	defer rows.Close()
+	if err != nil {
+		return err
+	}
+	a.MarginTokenInfo = nil
+	for rows.Next() {
+		var hash string
+		rows.Scan(&hash)
+		slog.Info("Could not confirm payment tx, deleting from records tx hash = " + hash)
+	}
+	query = `DELETE FROM referral_payment rp
+			where tx_confirmed=false`
+	_, err = a.Db.Query(query)
+	if err != nil {
+		slog.Error("Could not delete unconfirmed payments:" + err.Error())
+	}
+	return nil
+}
+
 // DbGetReferralChainFromChild returns the percentage of trader
 // fees earned by an agency.
 // Holdings are relevant for pure referrers only. The fees for pure referrers

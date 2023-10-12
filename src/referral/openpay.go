@@ -147,6 +147,10 @@ func (a *App) dbGetPayBatch() (bool, int64) {
 // ProcessAllPayments determins how much to pay and ultimately delegates
 // payment execution to payexec
 func (a *App) ProcessAllPayments() error {
+	// Filter blockchain events to confirm payments
+	a.SavePayments()
+	a.PurgeUnconfirmedPayments()
+
 	// determine batch timestamp
 	var batchTs string
 
@@ -210,6 +214,9 @@ func (a *App) ProcessAllPayments() error {
 	if err != nil {
 		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
 	}
+	// Filter blockchain events to confirm payments
+	a.SavePayments()
+
 	// schedule next payments
 	a.SchedulePayment()
 	return nil

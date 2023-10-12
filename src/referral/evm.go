@@ -39,6 +39,7 @@ func (a *App) CreateRpcClient() error {
 	return nil
 }
 
+// CreateMultipayInstance creates a contract instance of MultiPay
 func (a *App) CreateMultipayInstance() error {
 	var err error
 	if a.RpcClient == nil {
@@ -53,8 +54,8 @@ func (a *App) CreateMultipayInstance() error {
 	return nil
 }
 
+// CreateAuth creates the necessary object for write-blockchain transactions
 func (exc *basePayExec) CreateAuth() (*bind.TransactOpts, error) {
-
 	client := exc.Client
 	if client == nil {
 		return nil, errors.New("createAuth: rpc client is nil")
@@ -106,6 +107,7 @@ func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) 
 	return bal, err
 }
 
+// FilterPayments collects historical events and updates the database
 func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock uint64) ([]PaymentLog, error) {
 	// Create an event iterator for the MultiPayPayment events
 	opts := &bind.FilterOpts{
@@ -188,6 +190,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	return logs, nil
 }
 
+// get the block timestamp for a block with a given number
 func getBlockTimestamp(blockNum uint64, client *ethclient.Client) uint64 {
 	var b big.Int
 	b.SetUint64(blockNum)

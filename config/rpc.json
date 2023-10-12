@@ -2,7 +2,6 @@
   {
     "chainId": 80001,
     "HTTP": [
-      "https://matic-mumbai.chainstacklabs.com",
       "https://rpc-mumbai.maticvigil.com",
       "https://polygon-mumbai-bor.publicnode.com"
     ]

@@ -49,7 +49,7 @@ func (a *App) CreateMultipayInstance() error {
 	if err != nil {
 		return errors.New("Failed to instantiate Proxy contract: " + err.Error())
 	}
-	a.MultipayReadCtrct = c
+	a.MultipayCtrct = c
 	return nil
 }
 

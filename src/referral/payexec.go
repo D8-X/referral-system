@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net/http"
 	"referral-system/env"
+	"referral-system/src/contracts"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	d8x_futures "github.com/D8-X/d8x-futures-go-sdk"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/go-resty/resty/v2"
 	"github.com/spf13/viper"
 )
@@ -33,6 +35,7 @@ type PayExec interface {
 	Init(viper *viper.Viper, multiPayAddr string) error
 	GetBrokerAddr() common.Address
 	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) error
+	SetClient(client *ethclient.Client)
 }
 
 type PaySummaryAux struct {
@@ -53,8 +56,10 @@ type BrokerPaySignatureReqAux struct {
 type basePayExec struct {
 	BrokerAddr        common.Address
 	ExecPrivKey       *ecdsa.PrivateKey //executor private key
+	MultipayCtrct     *contracts.MultiPay
 	MultipayCtrctAddr string
 	ChainId           int64
+	Client            *ethclient.Client
 }
 
 type RemotePayExec struct {
@@ -68,6 +73,10 @@ type LocalPayExec struct {
 
 func (exc *basePayExec) GetBrokerAddr() common.Address {
 	return exc.BrokerAddr
+}
+
+func (exc *basePayExec) SetClient(client *ethclient.Client) {
+	exc.Client = client
 }
 
 func (exc *RemotePayExec) Init(viper *viper.Viper, multiPayAddr string) error {
@@ -141,6 +150,9 @@ func (exc *LocalPayExec) TransactPayment(tokenAddr common.Address, total *big.In
 
 func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) error {
 	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
+	if len(amounts) != len(payees) {
+		return errors.New("#amounts must be equal to #payees")
+	}
 	// get signature
 	ts := time.Now().Unix()
 	execAddr, _ := privateKeyToAddress(exc.ExecPrivKey)
@@ -160,9 +172,29 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 		return err
 	}
 	slog.Info("Got signature for payment execution:" + sig)
+	// check signature address
+	sigTrim := strings.TrimPrefix(sig, "0x")
+	signer, err := d8x_futures.RecoverPaymentSignatureAddr(common.Hex2Bytes(sigTrim[:]), payment)
+	if err != nil {
+		return errors.New("Could not recover signature " + err.Error())
+	}
+	if payment.Payer.String() != signer.String() {
+		slog.Error("Payment payer " + payment.Payer.String() + "not equal to signer " + signer.String())
+		return errors.New("Payer address must be signer address")
+	}
+	slog.Info("Signature ok")
+	txHash, err := exc.Pay(payment, sig, amounts, payees, msg)
+	if err != nil {
+		slog.Error("Unable to create payment:" + err.Error())
+		return err
+	}
+	slog.Info("Payment submitted tx hash = " + txHash)
 	return nil
 }
 
+// remoteGetSignature signs the payment data locally with the executor address and
+// retrieves the remote-broker signature via REST API. Returns the signature
+// as hex-string
 func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (string, error) {
 	var execWallet d8x_futures.Wallet
 	pk := fmt.Sprintf("%x", exc.ExecPrivKey.D)
@@ -171,6 +203,11 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (st
 		return "", errors.New("error creating wallet:" + err.Error())
 	}
 	_, sg, err := d8x_futures.CreatePaymentBrokerSignature(paydata, execWallet)
+	fmt.Println("Token    = ", paydata.Token.String())
+	fmt.Println("Broker   = ", paydata.Payer.String())
+	fmt.Println("Multipay = ", paydata.MultiPayCtrct.String())
+	fmt.Println("Amount   = ", paydata.TotalAmount.String())
+
 	var p = BrokerPaySignatureReqAux{
 		Payment: PaySummaryAux{
 			Payer:         paydata.Payer.String(),
@@ -221,6 +258,47 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (st
 		return "", errors.New(responseData.Error)
 	}
 	return responseData.BrokerSignature, nil
+}
+
+func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amounts []*big.Int, payees []common.Address, msg string) (string, error) {
+	// check pre-condition
+	t := new(big.Int).Set(amounts[0])
+	for i := 1; i < len(amounts); i++ {
+		t.Add(t, amounts[i])
+	}
+	if t.String() != payment.TotalAmount.String() {
+		return "", errors.New("total amount must be sum of amounts")
+	}
+	auth, err := exc.CreateAuth()
+	if err != nil {
+		slog.Error("Pay: Could not create auth: " + err.Error())
+		return "", err
+	}
+	if auth.From.String() != payment.Executor.String() {
+		return "", errors.New("Payment executor must transaction sender")
+	}
+	mpay, err := contracts.NewMultiPay(common.HexToAddress(exc.MultipayCtrctAddr), exc.Client)
+	if err != nil {
+		return "", errors.New("Failed to instantiate Proxy contract: " + err.Error())
+	}
+
+	var s = contracts.MultiPayPaySummary{
+		Payer:       payment.Payer,
+		Executor:    payment.Executor,
+		Token:       payment.Token,
+		Timestamp:   payment.Timestamp,
+		Id:          payment.Id,
+		TotalAmount: payment.TotalAmount,
+	}
+	auth.GasLimit = 5000000
+	sigTrim := strings.TrimPrefix(sig, "0x")
+	tx, err := mpay.DelegatedPay(auth, s, common.Hex2Bytes(sigTrim), amounts, payees, msg)
+	//tx, err := mpay.Pay(auth, s.Id, s.Token, amounts, payees, msg)
+	if err != nil {
+		slog.Error(err.Error())
+		return "", err
+	}
+	return tx.Hash().Hex(), nil
 }
 
 func privateKeyToAddress(k *ecdsa.PrivateKey) (string, error) {

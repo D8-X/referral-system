@@ -2,16 +2,7 @@
 Referral system
 
 # Todos
-
-- [x] agency: code/partner
-- max 10 agencies
-- [x] walk back in time block-time for historical payments
-- edit referral percentages as an agency?
-- schedule payment time
-- fool-proof loops/cycles in chain
-- [x] schedule DbUpdateTokenHoldings
-- [x] get queries
-- [x] no minimal fee accumulation implemented (requires price feed or config)
+- [] store failed tx in db (not just delete)
 
 # API
 

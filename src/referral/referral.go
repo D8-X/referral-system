@@ -649,6 +649,12 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 	if err != sql.ErrNoRows {
 		return errors.New("Refer to addr already in use")
 	}
+	// referral chain length
+	chain, _, err := a.DbGetReferralChainFromChild(rpl.ParentAddr, big.NewInt(0))
+	if err == nil && len(chain) > env.MAX_REFERRAL_CHAIN_LEN {
+		slog.Info("Max referral chain length reached for " + rpl.ParentAddr)
+		return errors.New("Reached maximum number of referrals")
+	}
 	// now safe to insert
 	query = `INSERT INTO referral_chain (parent, child, pass_on)
           	 VALUES ($1, $2, $3)`

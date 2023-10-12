@@ -15,4 +15,5 @@ const (
 	// other constants
 	DEFAULT_CODE               = "DEFAULT"
 	REFERRER_TOKENX_BAL_FREQ_H = 24 * 5
+	MAX_REFERRAL_CHAIN_LEN     = 5
 )

@@ -34,7 +34,7 @@ type PayExec interface {
 	// assign private key and remote broker address
 	Init(viper *viper.Viper, multiPayAddr string) error
 	GetBrokerAddr() common.Address
-	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) error
+	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error)
 	SetClient(client *ethclient.Client)
 }
 
@@ -143,15 +143,15 @@ func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []com
 	}
 }
 
-func (exc *LocalPayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) error {
+func (exc *LocalPayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error) {
 	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
-	return nil
+	return "", nil
 }
 
-func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) error {
+func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error) {
 	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
 	if len(amounts) != len(payees) {
-		return errors.New("#amounts must be equal to #payees")
+		return "", errors.New("#amounts must be equal to #payees")
 	}
 	// get signature
 	ts := time.Now().Unix()
@@ -169,27 +169,27 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 
 	sig, err := exc.remoteGetSignature(payment)
 	if err != nil {
-		return err
+		return "", err
 	}
 	slog.Info("Got signature for payment execution:" + sig)
 	// check signature address
 	sigTrim := strings.TrimPrefix(sig, "0x")
 	signer, err := d8x_futures.RecoverPaymentSignatureAddr(common.Hex2Bytes(sigTrim[:]), payment)
 	if err != nil {
-		return errors.New("Could not recover signature " + err.Error())
+		return "", errors.New("Could not recover signature " + err.Error())
 	}
 	if payment.Payer.String() != signer.String() {
 		slog.Error("Payment payer " + payment.Payer.String() + "not equal to signer " + signer.String())
-		return errors.New("Payer address must be signer address")
+		return "", errors.New("Payer address must be signer address")
 	}
 	slog.Info("Signature ok")
 	txHash, err := exc.Pay(payment, sig, amounts, payees, msg)
 	if err != nil {
 		slog.Error("Unable to create payment:" + err.Error())
-		return err
+		return "", err
 	}
 	slog.Info("Payment submitted tx hash = " + txHash)
-	return nil
+	return txHash, nil
 }
 
 // remoteGetSignature signs the payment data locally with the executor address and

@@ -421,6 +421,25 @@ func (a *App) IsAgency(addr string) bool {
 	return err != sql.ErrNoRows
 }
 
+// dbWriteTx write info about the payment transaction into referral_payment
+func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, payees []common.Address, batchTs string, poolId uint32, tx string) {
+	slog.Info("Inserting Payment TX in DB")
+	t, _ := strconv.Atoi(batchTs)
+	ts := time.Unix(int64(t), 0)
+	query := `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	for k := 0; k < len(payees); k++ {
+		if amounts[k].BitLen() == 0 {
+			// we don't write 0 amounts to the database
+			continue
+		}
+		_, err := a.Db.Exec(query, traderAddr, payees[k].String(), code, poolId, ts, amounts[k].String(), tx)
+		if err != nil {
+			slog.Error("Could not insert tx to db for trader " + traderAddr + ": " + err.Error())
+		}
+	}
+}
+
 // writeDbPayment writes data from multiplay contract into the database
 // if there is already an entry for a given record which is not confirmed, it sets the confirmed flag to true
 // db keys are trader_addr, payee_addr, pool_id and batch_ts
@@ -431,7 +450,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
 	query := "SELECT tx_confirmed FROM referral_payment " +
-		"WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3"
+		"WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3"
 	var isConfirmed bool
 	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime).Scan(&isConfirmed)
 	if err == sql.ErrNoRows {
@@ -446,9 +465,10 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		return err
 	} else if isConfirmed == false {
 		// set tx confirmed to true
-		query = `UPDATE referral_payment SET tx_confirmed = true
-				WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime)
+		query = `UPDATE referral_payment 
+				SET tx_confirmed = true, block_nr = $4, block_ts = $5
+				WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, p.BlockNumber, utcBlockTime)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}

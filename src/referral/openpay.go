@@ -224,9 +224,9 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	payees[0] = common.HexToAddress(row.TraderAddr)
 	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail)
 	distributed := new(big.Int).Set(amounts[0])
-	// we start at 1 (after broker), to set the broker amount to the
+	// we start at 2 (after trader and broker), to set the broker amount to the
 	// remainder (to avoid floating point rounding issues)
-	for k := 1; k < len(chain); k++ {
+	for k := 2; k < len(chain); k++ {
 		el := chain[k]
 		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay)
 		amounts[k+1] = amount
@@ -245,7 +245,12 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
 	a.PaymentExecutor.SetClient(a.RpcClient)
-	a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
+	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash)
 }
 
 // DbGetReferralChainForCode gets the entire chain of referrals

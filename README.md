@@ -271,8 +271,7 @@ Success:
 }
 ```
 Error:
-`{"error":"code selection failed:Code already selected"}`
-`{"error":"code selection failed:Failed"}``
+`{"error":"code selection failed:Code already selected"}`, `{"error":"code selection failed:Failed"}`
 
 
 <details>

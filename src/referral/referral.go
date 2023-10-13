@@ -423,6 +423,10 @@ func (a *App) CutPercentageAgency(addr string, holdingsDecN *big.Int) (float64, 
 		slog.Error("Error for CutPercentageAgency address " + addr)
 		return 0, false, errors.New("Could not get percentage")
 	}
+	if len(chain) == 0 && isAg {
+		// broker
+		return 100, true, nil
+	}
 	return 100 * chain[len(chain)-1].ChildAvail, isAg, nil
 
 }

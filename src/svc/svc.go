@@ -12,6 +12,7 @@ import (
 	"referral-system/src/db"
 	"referral-system/src/referral"
 	"referral-system/src/utils"
+	"sync"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -68,14 +69,14 @@ func Run() {
 		slog.Error("Error:" + err.Error())
 		return
 	}
+	var wg sync.WaitGroup
 	if hasFinished, _ := app.DbGetPaymentExecHasFinished(); !hasFinished || app.IsPaymentDue() {
 		// application crashed before payment was finalized, so restart
 		go app.ProcessAllPayments()
 	}
 
-	api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT))
-	//app.DbGetReferralChainOfChild("0x9d5aaB428e98678d0E645ea4AeBd25f744341a05")
-	//https://github.com/gitploy-io/cronexpr
+	go api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT), &wg)
+	wg.Wait()
 }
 
 func loadEnv() (*viper.Viper, error) {

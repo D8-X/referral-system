@@ -74,7 +74,7 @@ func Run() {
 		// application crashed before payment was finalized, so restart
 		go app.ProcessAllPayments()
 	}
-
+	wg.Add(1)
 	go api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT), &wg)
 	wg.Wait()
 }

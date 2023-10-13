@@ -13,7 +13,6 @@ import (
 )
 
 func StartApiServer(app *referral.App, host string, port string, wg *sync.WaitGroup) error {
-	wg.Add(1)
 	defer wg.Done()
 	router := chi.NewRouter()
 	RegisterGlobalMiddleware(router)

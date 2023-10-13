@@ -45,7 +45,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 			join referral_settings rs
 			on LOWER(rs.value) = LOWER(rafpt.broker_addr)
 			and rs.property='broker_addr'
-			WHERE LOWER(trader_addr)==$1`
+			WHERE LOWER(trader_addr)=$1`
 	rows, err := a.Db.Query(query, traderAddr)
 	defer rows.Close()
 	if err != nil {

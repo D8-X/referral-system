@@ -3,6 +3,7 @@ Referral system
 
 # Todos
 - [] store failed tx in db (not just delete)
+- [] local broker
 
 # API
 

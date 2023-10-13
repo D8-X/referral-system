@@ -101,6 +101,7 @@ type DbPayment struct {
 	BatchTs      time.Time
 	PaidAmountCC string
 	TxHash       string
+	BlockNr      uint64
 	BlockTs      time.Time
 	TxConfirmed  bool
 }
@@ -310,18 +311,31 @@ func (a *App) SavePayments() error {
 // PurgeUnconfirmedPayments deletes records from the database that could not be
 // confirmed on-chain. Must run after 'SavePayments'
 func (a *App) PurgeUnconfirmedPayments() error {
-	query := `select distinct(tx_hash) from referral_payment rp 
+	query := `select trader_addr, payee_addr, 
+				code, pool_id, batch_ts, paid_amount_cc, 
+				tx_hash, block_ts
+				from referral_payment rp 
 			where tx_confirmed = false;`
 	rows, err := a.Db.Query(query)
 	defer rows.Close()
 	if err != nil {
 		return err
 	}
-	a.MarginTokenInfo = nil
+	var row DbPayment
 	for rows.Next() {
-		var hash string
-		rows.Scan(&hash)
-		slog.Info("Could not confirm payment tx, deleting from records tx hash = " + hash)
+		rows.Scan(&row.TraderAddr, &row.PayeeAddr, &row.Code, &row.PoolId, &row.BatchTs, &row.PaidAmountCC,
+			&row.TxHash, &row.BlockTs)
+		slog.Info("Could not confirm payment tx, moving to failed payments tx hash = " + row.TxHash)
+		query = `INSERT INTO referral_failed_payment
+			(trader_addr, payee_addr, 
+			 code, pool_id, batch_ts, paid_amount_cc, 
+			 tx_hash, ts)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+		_, err := a.Db.Exec(query, row.TraderAddr, row.PayeeAddr, row.Code, row.PoolId, row.BatchTs, row.PaidAmountCC,
+			row.TxHash, row.BlockTs)
+		if err != nil {
+			slog.Error("Could not insert tx to failed tx " + row.TxHash + ": " + err.Error())
+		}
 	}
 	query = `DELETE FROM referral_payment rp
 			where tx_confirmed=false`

@@ -6,12 +6,15 @@ import (
 	"net"
 	"net/http"
 	"referral-system/src/referral"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/exp/slog"
 )
 
-func StartApiServer(app *referral.App, host string, port string) error {
+func StartApiServer(app *referral.App, host string, port string, wg *sync.WaitGroup) error {
+	wg.Add(1)
+	defer wg.Done()
 	router := chi.NewRouter()
 	RegisterGlobalMiddleware(router)
 	RegisterRoutes(router, app)

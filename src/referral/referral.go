@@ -101,6 +101,7 @@ type DbPayment struct {
 	BatchTs      time.Time
 	PaidAmountCC string
 	TxHash       string
+	BlockNr      uint64
 	BlockTs      time.Time
 	TxConfirmed  bool
 }
@@ -108,39 +109,41 @@ type DbPayment struct {
 // New intantiates a referral app
 func (a *App) New(viper *viper.Viper) error {
 
-	// decide whether we have a local broker or a remote broker
-	if viper.GetString(env.REMOTE_BROKER_HTTP) == "" {
-		a.PaymentExecutor = &LocalPayExec{}
-	} else {
-		a.PaymentExecutor = &RemotePayExec{}
-	}
-	err := a.PaymentExecutor.Init(viper)
-	if err != nil {
-		return err
-	}
-
-	// connect db
-	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
-	err = a.ConnectDB(connStr)
-	if err != nil {
-		return err
-	}
 	// load settings
 	s, err := loadConfig(viper)
 	if err != nil {
 		return err
 	}
 	a.Settings = s
-	err = a.SettingsToDB()
-	if err != nil {
-		return err
-	}
 
 	rpcs, err := loadRPCConfig(viper)
 	if err != nil {
 		return err
 	}
 	a.Rpc = rpcs
+
+	// decide whether we have a local broker or a remote broker
+	if viper.GetString(env.REMOTE_BROKER_HTTP) == "" {
+		a.PaymentExecutor = &LocalPayExec{}
+	} else {
+		a.PaymentExecutor = &RemotePayExec{}
+	}
+	err = a.PaymentExecutor.Init(viper, a.Settings.MultiPayContractAddr)
+	if err != nil {
+		return err
+	}
+
+	// settings to database
+	err = a.SettingsToDB()
+	if err != nil {
+		return err
+	}
+	// connect db
+	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
+	err = a.ConnectDB(connStr)
+	if err != nil {
+		return err
+	}
 
 	err = a.CreateRpcClient()
 	if err != nil {
@@ -295,12 +298,50 @@ func (a *App) SavePayments() error {
 		// key = trader_addr, payee_addr, pool_id, batch_timestamp
 		traderAddr := p.PayeeAddr[0].String()
 		for k, payee := range p.PayeeAddr {
-			if p.AmountDecN[k].BitLen() == 0 {
-				continue
+			result := p.AmountDecN[k].Cmp(big.NewInt(0))
+			if result != 0 {
+				a.writeDbPayment(traderAddr, payee.String(), p, k)
 			}
-			a.writeDbPayment(traderAddr, payee.String(), p, k)
 		}
 
+	}
+	return nil
+}
+
+// PurgeUnconfirmedPayments deletes records from the database that could not be
+// confirmed on-chain. Must run after 'SavePayments'
+func (a *App) PurgeUnconfirmedPayments() error {
+	query := `select trader_addr, payee_addr, 
+				code, pool_id, batch_ts, paid_amount_cc, 
+				tx_hash, block_ts
+				from referral_payment rp 
+			where tx_confirmed = false;`
+	rows, err := a.Db.Query(query)
+	defer rows.Close()
+	if err != nil {
+		return err
+	}
+	var row DbPayment
+	for rows.Next() {
+		rows.Scan(&row.TraderAddr, &row.PayeeAddr, &row.Code, &row.PoolId, &row.BatchTs, &row.PaidAmountCC,
+			&row.TxHash, &row.BlockTs)
+		slog.Info("Could not confirm payment tx, moving to failed payments tx hash = " + row.TxHash)
+		query = `INSERT INTO referral_failed_payment
+			(trader_addr, payee_addr, 
+			 code, pool_id, batch_ts, paid_amount_cc, 
+			 tx_hash, ts)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+		_, err := a.Db.Exec(query, row.TraderAddr, row.PayeeAddr, row.Code, row.PoolId, row.BatchTs, row.PaidAmountCC,
+			row.TxHash, row.BlockTs)
+		if err != nil {
+			slog.Error("Could not insert tx to failed tx " + row.TxHash + ": " + err.Error())
+		}
+	}
+	query = `DELETE FROM referral_payment rp
+			where tx_confirmed=false`
+	_, err = a.Db.Query(query)
+	if err != nil {
+		slog.Error("Could not delete unconfirmed payments:" + err.Error())
 	}
 	return nil
 }
@@ -419,6 +460,25 @@ func (a *App) IsAgency(addr string) bool {
 	return err != sql.ErrNoRows
 }
 
+// dbWriteTx write info about the payment transaction into referral_payment
+func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, payees []common.Address, batchTs string, poolId uint32, tx string) {
+	slog.Info("Inserting Payment TX in DB")
+	t, _ := strconv.Atoi(batchTs)
+	ts := time.Unix(int64(t), 0)
+	query := `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	for k := 0; k < len(payees); k++ {
+		if amounts[k].BitLen() == 0 {
+			// we don't write 0 amounts to the database
+			continue
+		}
+		_, err := a.Db.Exec(query, traderAddr, payees[k].String(), code, poolId, ts, amounts[k].String(), tx)
+		if err != nil {
+			slog.Error("Could not insert tx to db for trader " + traderAddr + ": " + err.Error())
+		}
+	}
+}
+
 // writeDbPayment writes data from multiplay contract into the database
 // if there is already an entry for a given record which is not confirmed, it sets the confirmed flag to true
 // db keys are trader_addr, payee_addr, pool_id and batch_ts
@@ -429,9 +489,9 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
 	query := "SELECT tx_confirmed FROM referral_payment " +
-		"WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3"
+		"WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3 AND pool_id=$4"
 	var isConfirmed bool
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime).Scan(&isConfirmed)
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId).Scan(&isConfirmed)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, block_ts, tx_confirmed)
@@ -444,9 +504,10 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		return err
 	} else if isConfirmed == false {
 		// set tx confirmed to true
-		query = `UPDATE referral_payment SET tx_confirmed = true
-				WHERE trader_addr = $1 AND payee_addr = $2 AND batch_ts = $3`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime)
+		query = `UPDATE referral_payment 
+				SET tx_confirmed = true, block_nr = $4, block_ts = $5
+				WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, p.BlockNumber, utcBlockTime)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
@@ -601,6 +662,12 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 	err = a.Db.QueryRow(query, rpl.ReferToAddr).Scan(&addr)
 	if err != sql.ErrNoRows {
 		return errors.New("Refer to addr already in use")
+	}
+	// referral chain length
+	chain, _, err := a.DbGetReferralChainFromChild(rpl.ParentAddr, big.NewInt(0))
+	if err == nil && len(chain) > env.MAX_REFERRAL_CHAIN_LEN {
+		slog.Info("Max referral chain length reached for " + rpl.ParentAddr)
+		return errors.New("Reached maximum number of referrals")
 	}
 	// now safe to insert
 	query = `INSERT INTO referral_chain (parent, child, pass_on)

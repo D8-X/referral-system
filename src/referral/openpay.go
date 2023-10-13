@@ -147,6 +147,10 @@ func (a *App) dbGetPayBatch() (bool, int64) {
 // ProcessAllPayments determins how much to pay and ultimately delegates
 // payment execution to payexec
 func (a *App) ProcessAllPayments() error {
+	// Filter blockchain events to confirm payments
+	a.SavePayments()
+	a.PurgeUnconfirmedPayments()
+
 	// determine batch timestamp
 	var batchTs string
 
@@ -210,6 +214,9 @@ func (a *App) ProcessAllPayments() error {
 	if err != nil {
 		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
 	}
+	// Filter blockchain events to confirm payments
+	a.SavePayments()
+
 	// schedule next payments
 	a.SchedulePayment()
 	return nil
@@ -224,9 +231,9 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	payees[0] = common.HexToAddress(row.TraderAddr)
 	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail)
 	distributed := new(big.Int).Set(amounts[0])
-	// we start at 1 (after broker), to set the broker amount to the
+	// we start at 2 (after trader and broker), to set the broker amount to the
 	// remainder (to avoid floating point rounding issues)
-	for k := 1; k < len(chain); k++ {
+	for k := 2; k < len(chain); k++ {
 		el := chain[k]
 		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay)
 		amounts[k+1] = amount
@@ -237,13 +244,20 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	payees[1] = a.Settings.BrokerPayoutAddr
 	// amount for parent is set to remainder so that we ensure
 	// totalDecN = sum of distributed amounts
-	amounts[1] = new(big.Int).Sub(totalDecN, distributed)
+	amounts[1] = new(big.Int).Set(totalDecN)
+	amounts[1].Sub(amounts[1], distributed)
 
 	// encode message: batchTs.<code>.<poolId>
 	msg := batchTs + "." + row.Code + "." + strconv.Itoa(int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
-	a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), amounts, payees, id, msg)
+	a.PaymentExecutor.SetClient(a.RpcClient)
+	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash)
 }
 
 // DbGetReferralChainForCode gets the entire chain of referrals

@@ -2,16 +2,8 @@
 Referral system
 
 # Todos
-
-- [x] agency: code/partner
-- max 10 agencies
-- [x] walk back in time block-time for historical payments
-- edit referral percentages as an agency?
-- schedule payment time
-- fool-proof loops/cycles in chain
-- [x] schedule DbUpdateTokenHoldings
-- [x] get queries
-- [x] no minimal fee accumulation implemented (requires price feed or config)
+- [] store failed tx in db (not just delete)
+- [] local broker
 
 # API
 
@@ -232,6 +224,21 @@ Error:
 {"error":"Incorrect 'addr' parameter"}
 ```
 
+
+## Get request: next payment date
+
+`http://127.0.0.1:8000/next-pay`
+
+```
+{
+  "type": "next-pay",
+  "data": {
+    "nextPaymentDueTs":1697544000,
+    "nextPaymentDue":"2023-October-17 14:00:00"
+    }
+}
+```
+
 ## Get request: code selection of a trader
 
 http://127.0.0.1:8000/my-code-selection?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
@@ -264,8 +271,7 @@ Success:
 }
 ```
 Error:
-`{"error":"code selection failed:Code already selected"}`
-`{"error":"code selection failed:Failed"}``
+`{"error":"code selection failed:Code already selected"}`, `{"error":"code selection failed:Failed"}`
 
 
 <details>

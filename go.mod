@@ -13,6 +13,7 @@ require (
 )
 
 require (
+	github.com/D8-X/d8x-futures-go-sdk v0.0.15 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/adhocore/gronx v1.6.6 // indirect

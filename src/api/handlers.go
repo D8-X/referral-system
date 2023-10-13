@@ -150,12 +150,12 @@ func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	if err != nil {
 		errMsg := `Wrong argument types. Usage:
 		{
-			'Code' : CODE1,
-			'ReferrerAddr' : '0xabc...' ,
-			'AgencyAddr' : '0xcbc...',
-			'CreatedOn' : 1696166434,
-			'PassOnPercTDF' : 5000,
-			'Signature' :  '0xa1ef...'
+			'code' : 'CODE1',
+			'referrerAddr' : '0xabc...' ,
+			'agencyAddr' : '0xcbc...',
+			'createdOn' : 1696166434,
+			'passOnPercTDF' : 5000,
+			'signature' :  '0xa1ef...'
 		}`
 		errMsg = strings.ReplaceAll(errMsg, "\t", "")
 		errMsg = strings.ReplaceAll(errMsg, "\n", "")
@@ -429,6 +429,33 @@ func onTokenInfo(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		slog.Error("onTokenInfo unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResponse)
+}
+
+// onNextPay handles the endpoint that sends the next payment date as
+// timestamp and human-readable date
+func onNextPay(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	nxt := utils.NextPaymentSchedule(app.Settings.PayCronSchedule)
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	type Res struct {
+		NextPaymentDueTs int    `json:"nextPaymentDueTs"`
+		NextPaymentDue   string `json:"nextPaymentDue"`
+	}
+	info := Res{
+		NextPaymentDueTs: int(nxt.Unix()),
+		NextPaymentDue:   nxt.Format("2006-January-02 15:04:05"),
+	}
+	response := utils.APIResponse{Type: "next-pay", Data: info}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		slog.Error("onNextPay unable to marshal response" + err.Error())
 		errMsg := "Unavailable"
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
 		return

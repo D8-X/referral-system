@@ -2,6 +2,7 @@ package referral
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"log/slog"
 	"math/big"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -36,25 +39,57 @@ func (a *App) CreateRpcClient() error {
 	return nil
 }
 
+// CreateMultipayInstance creates a contract instance of MultiPay
 func (a *App) CreateMultipayInstance() error {
 	var err error
 	if a.RpcClient == nil {
 		return errors.New("CreateMultipayInstance requires RpcClient")
 	}
 	evmAddr := common.HexToAddress(a.Settings.MultiPayContractAddr)
-	for trial := 0; ; trial++ {
-		a.MultipayCtrct, err = contracts.NewMultiPay(evmAddr, a.RpcClient)
-		if err != nil {
-			if trial == 5 {
-				return err
-			}
-			slog.Info("Failed to instantiate Multipay " + err.Error() + " retrying " + strconv.Itoa(5-trial))
-			time.Sleep(time.Duration(2) * time.Second)
-		} else {
-			break
-		}
+	c, err := contracts.NewMultiPay(evmAddr, a.RpcClient)
+	if err != nil {
+		return errors.New("Failed to instantiate Proxy contract: " + err.Error())
 	}
+	a.MultipayCtrct = c
 	return nil
+}
+
+// CreateAuth creates the necessary object for write-blockchain transactions
+func (exc *basePayExec) CreateAuth() (*bind.TransactOpts, error) {
+	client := exc.Client
+	if client == nil {
+		return nil, errors.New("createAuth: rpc client is nil")
+	}
+	privateKey := exc.ExecPrivKey
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, errors.New("error casting public key to ECDSA")
+	}
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+	chainIdB := new(big.Int).SetUint64(uint64(exc.ChainId))
+	auth, err := bind.NewKeyedTransactorWithChainID(exc.ExecPrivKey, chainIdB)
+	signerFn := func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+		return types.SignTx(tx, types.NewEIP155Signer(chainIdB), privateKey)
+	}
+	auth.Signer = signerFn
+	// set default values
+	auth.Value = big.NewInt(0)
+	auth.GasLimit = uint64(300000)
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return nil, err
+	}
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	nonceB := new(big.Int).SetUint64(nonce)
+	auth.Nonce = nonceB
+	auth.GasPrice = gasPrice
+
+	return auth, nil
 }
 
 func (a *App) CreateErc20Instance(tokenAddr string) (*contracts.Erc20, error) {
@@ -72,6 +107,7 @@ func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) 
 	return bal, err
 }
 
+// FilterPayments collects historical events and updates the database
 func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock uint64) ([]PaymentLog, error) {
 	// Create an event iterator for the MultiPayPayment events
 	opts := &bind.FilterOpts{
@@ -154,6 +190,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	return logs, nil
 }
 
+// get the block timestamp for a block with a given number
 func getBlockTimestamp(blockNum uint64, client *ethclient.Client) uint64 {
 	var b big.Int
 	b.SetUint64(blockNum)

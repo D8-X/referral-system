@@ -28,7 +28,7 @@ FROM trades_history th
 join referral_settings rs on rs.property = 'payment_max_lookback_days'
 join referral_settings rs2 on rs2.property = 'broker_addr'
 LEFT JOIN referral_last_payment lp
-    ON LOWER(lp.trader_addr)=LOWER(th.trader_addr)
+    ON LOWER(lp.trader_addr)=LOWER(th.trader_addr) and lp.pool_id=th.perpetual_id/100000
 LEFT JOIN referral_code_usage codeusg
     ON LOWER(th.trader_addr) = LOWER(codeusg.trader_addr)
     AND LOWER(th.broker_addr) = LOWER(rs2.value)

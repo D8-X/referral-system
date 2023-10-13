@@ -224,6 +224,21 @@ Error:
 {"error":"Incorrect 'addr' parameter"}
 ```
 
+
+## Get request: next payment date
+
+`http://127.0.0.1:8000/next-pay`
+
+```
+{
+  "type": "next-pay",
+  "data": {
+    "nextPaymentDueTs":1697544000,
+    "nextPaymentDue":"2023-October-17 14:00:00"
+    }
+}
+```
+
 ## Get request: code selection of a trader
 
 http://127.0.0.1:8000/my-code-selection?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366

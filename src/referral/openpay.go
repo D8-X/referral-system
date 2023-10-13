@@ -39,10 +39,13 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 				mti.pool_id, rafpt.code, rafpt.broker_fee_cc, 
 				rafpt.last_trade_considered_ts, 
 				mti.token_name, mti.token_decimals
-			  FROM referral_aggr_fees_per_trader rafpt
-			  JOIN margin_token_info mti
-			  ON mti.pool_id = rafpt.pool_id
-			  WHERE LOWER(trader_addr)=$1`
+			FROM referral_aggr_fees_per_trader rafpt
+			JOIN margin_token_info mti
+			ON mti.pool_id = rafpt.pool_id
+			join referral_settings rs
+			on LOWER(rs.value) = LOWER(rafpt.broker_addr)
+			and rs.property='broker_addr'
+			WHERE LOWER(trader_addr)==$1`
 	rows, err := a.Db.Query(query, traderAddr)
 	defer rows.Close()
 	if err != nil {
@@ -176,11 +179,14 @@ func (a *App) ProcessAllPayments() error {
 	}
 	// query snapshot of open pay view
 	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 
-				agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
-				mti.token_addr, mti.token_decimals
-			  FROM referral_aggr_fees_per_trader agfpt
-			  JOIN margin_token_info mti
-			  ON mti.pool_id = agfpt.pool_id`
+					agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
+					mti.token_addr, mti.token_decimals
+				FROM referral_aggr_fees_per_trader agfpt
+				JOIN margin_token_info mti
+				ON mti.pool_id = agfpt.pool_id
+				join referral_settings rs
+				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
+				and rs.property='broker_addr'`
 	rows, err := a.Db.Query(query)
 	defer rows.Close()
 	if err != nil {

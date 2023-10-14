@@ -26,8 +26,7 @@ import (
 )
 
 /*
-	PayExec implements an interface for either a local broker or a remote
-	broker.
+	PayExec implements an interface for a broker.
 */
 
 type PayExec interface {
@@ -65,10 +64,6 @@ type basePayExec struct {
 type RemotePayExec struct {
 	basePayExec
 	RemoteBrkrUrl string
-}
-
-type LocalPayExec struct {
-	basePayExec
 }
 
 func (exc *basePayExec) GetBrokerAddr() common.Address {
@@ -119,33 +114,12 @@ func (exc *RemotePayExec) Init(viper *viper.Viper, multiPayAddr string) error {
 	return nil
 }
 
-func (exc *LocalPayExec) Init(viper *viper.Viper, multiPayAddr string) error {
-	exc.ChainId = viper.GetInt64(env.CHAIN_ID)
-	exc.MultipayCtrctAddr = multiPayAddr
-	pk, err := crypto.HexToECDSA(viper.GetString(env.BROKER_KEY))
-	if err != nil {
-		return errors.New("BROKER_KEY not correctly defined: " + err.Error())
-	}
-	exc.ExecPrivKey = pk
-	addrStr, err := privateKeyToAddress(pk)
-	if err != nil {
-		return err
-	}
-	exc.BrokerAddr = common.HexToAddress(addrStr)
-	return nil
-}
-
 func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) {
 	slog.Info("transact " + msg + ", batch " + strconv.FormatInt(id, 10))
 	for k := 0; k < len(payees); k++ {
 		slog.Info(" -- Payee " + payees[k].String())
 		slog.Info("    Amount (decN)" + amounts[k].String())
 	}
-}
-
-func (exc *LocalPayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error) {
-	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
-	return "", nil
 }
 
 func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error) {

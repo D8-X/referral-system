@@ -122,12 +122,7 @@ func (a *App) New(viper *viper.Viper) error {
 	}
 	a.Rpc = rpcs
 
-	// decide whether we have a local broker or a remote broker
-	if viper.GetString(env.REMOTE_BROKER_HTTP) == "" {
-		a.PaymentExecutor = &LocalPayExec{}
-	} else {
-		a.PaymentExecutor = &RemotePayExec{}
-	}
+	a.PaymentExecutor = &RemotePayExec{}
 	err = a.PaymentExecutor.Init(viper, a.Settings.MultiPayContractAddr)
 	if err != nil {
 		return err

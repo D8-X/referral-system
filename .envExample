@@ -15,6 +15,7 @@ API_BIND_ADDR=127.0.0.1
 #Docker:
 #API_BIND_ADDR=0.0.0.0
 
-BROKER_KEY="abcde..."
-# Optional Remote Broker, e.g., https://broker.main.yourdomain.com
+# Remote Broker, e.g., https://broker.main.yourdomain.com
 REMOTE_BROKER_HTTP="https://broker.zkdev.d8x.xyz/"
+# folder with keyfile.txt
+KEYFILE_PATH="./config/"

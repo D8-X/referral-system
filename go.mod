@@ -1,6 +1,6 @@
 module referral-system
 
-go 1.21.1
+go 1.21
 
 require (
 	github.com/D8-X/d8x-futures-go-sdk v0.0.15

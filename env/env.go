@@ -11,6 +11,7 @@ const (
 	BROKER_KEY           = "BROKER_KEY"
 	API_PORT             = "API_PORT"
 	API_BIND_ADDR        = "API_BIND_ADDR"
+	KEYFILE_PATH         = "KEYFILE_PATH"
 
 	// other constants
 	DEFAULT_CODE               = "DEFAULT"

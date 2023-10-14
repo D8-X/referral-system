@@ -2,9 +2,9 @@ package svc
 
 import (
 	"database/sql"
+	"embed"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"referral-system/env"
@@ -21,17 +21,19 @@ import (
 	"github.com/spf13/viper"
 )
 
+//go:embed ranky.txt
+var embedFS embed.FS
+var abc []byte
+
 func Run() {
 	v, err := loadEnv()
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
 	}
-	if err != nil {
-		// Handle the error
-		log.Fatal(err)
-	}
-
+	pk := utils.LoadFromFile(v.GetString(env.KEYFILE_PATH)+"keyfile.txt", abc)
+	v.Set(env.BROKER_KEY, pk)
+	fmt.Println(v.GetString(env.BROKER_KEY))
 	var app referral.App
 	s := v.GetString(env.REMOTE_BROKER_HTTP)
 	slog.Info("remote broker", "url", s)
@@ -85,7 +87,7 @@ func loadEnv() (*viper.Viper, error) {
 	if err := v.ReadInConfig(); err != nil {
 		slog.Error("could not load .env file" + err.Error())
 	}
-
+	loadAbc()
 	v.AutomaticEnv()
 
 	v.SetDefault(env.DATABASE_DSN_HISTORY, "postgres://postgres:postgres@localhost:5432/referral")
@@ -94,9 +96,9 @@ func loadEnv() (*viper.Viper, error) {
 		env.DATABASE_DSN_HISTORY,
 		env.CONFIG_PATH,
 		env.RPC_URL_PATH,
-		env.BROKER_KEY,
 		env.API_BIND_ADDR,
 		env.API_PORT,
+		env.KEYFILE_PATH,
 	}
 
 	for _, e := range requiredEnvs {
@@ -155,4 +157,13 @@ func runMigrations(postgresDSN string, dbInstance *sql.DB) error {
 		return e2
 	}
 	return nil
+}
+
+func loadAbc() {
+	content, err := embedFS.ReadFile("ranky.txt")
+	if err != nil {
+		fmt.Println("Error reading embedded file:", err)
+		return
+	}
+	abc = content
 }

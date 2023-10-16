@@ -1,13 +1,10 @@
 # referral-system
 Referral system
 
-# Todos
-- [] store failed tx in db (not just delete)
-- [] local broker
-
 # API
 
-Definitions:
+<details>
+<summary>Definitions</summary>
 - The **broker** is an address that is specified in the backend settings and signs the trades and determines a 'broker fee' that the trader pays on their trade.
 - **Referral codes** will give the trader a rebate on their broker fees that they get paid out as scheduled in the backend (e.g., once a week). The creator of the code also gets a cut of the fees that the trader paid.
 - An **agency** is an address that refer to other addresses that then become agencies. If such a downstream agency creates a code, all agencies in the chain earn in relative terms from the trading fees paid by the trader that is using the referral code. The broker is an agency. 
@@ -15,7 +12,7 @@ Definitions:
   - An agency can refer to many other addresses and make them an agency. 
   - No loops: An agency can only be referred to by one agency.
 - A **referrer** is an address that created a code. A code can be created by anyone. If the code was created by an agency, the rebate depends on the entire chain of agencies and the code's specific pass-on percentage. If the code was created by an address that is not an agency, the trader rebate and referrer cut depends on the referrer's token holdings as specified in the broker backend settings.
-
+</details>
 
 
 <details>
@@ -407,5 +404,13 @@ Generate the ABI:
 `abigen --abi src/contracts/abi/MultiPay.json --pkg contracts --type MultiPay --out multi_pay.go`
 `abigen --abi src/contracts/abi/ERC20.json --pkg contracts --type Erc20 --out erc20.go`
 
+## Run locally
+- copy .envExample into .env and edit
+- run `go run cmd/keygen/main.go ranky.txt` and copy ranky.txt into src/svc
+- store the executor key in a file "./config/keyfile.txt", preceeded by 0x
+- go run cmd/main.go
+
+
 # Payment execution
 See [here](README_PAY.md)
+

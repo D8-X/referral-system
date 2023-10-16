@@ -1,11 +1,13 @@
 module referral-system
 
-go 1.21.1
+go 1.21
 
 require (
+	github.com/D8-X/d8x-futures-go-sdk v0.0.15
+	github.com/adhocore/gronx v1.6.6
 	github.com/ethereum/go-ethereum v1.13.2
 	github.com/go-chi/chi/v5 v5.0.10
-	github.com/go-chi/cors v1.2.1
+	github.com/go-resty/resty/v2 v2.9.1
 	github.com/golang-migrate/migrate/v4 v4.16.2
 	github.com/miguelmota/go-solidity-sha3 v0.1.1
 	github.com/spf13/viper v1.16.0
@@ -13,10 +15,8 @@ require (
 )
 
 require (
-	github.com/D8-X/d8x-futures-go-sdk v0.0.15 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
-	github.com/adhocore/gronx v1.6.6 // indirect
 	github.com/bits-and-blooms/bitset v1.5.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
@@ -27,7 +27,6 @@ require (
 	github.com/ethereum/c-kzg-4844 v0.3.1 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
-	github.com/go-resty/resty/v2 v2.9.1 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect

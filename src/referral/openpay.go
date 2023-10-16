@@ -237,9 +237,7 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	payees[0] = common.HexToAddress(row.TraderAddr)
 	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail)
 	distributed := new(big.Int).Set(amounts[0])
-	// we start at 2 (after trader and broker), to set the broker amount to the
-	// remainder (to avoid floating point rounding issues)
-	for k := 2; k < len(chain); k++ {
+	for k := 1; k < len(chain); k++ {
 		el := chain[k]
 		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay)
 		amounts[k+1] = amount

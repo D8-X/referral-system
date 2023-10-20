@@ -16,7 +16,6 @@ import (
 	"referral-system/src/contracts"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	d8x_futures "github.com/D8-X/d8x-futures-go-sdk"
@@ -37,6 +36,7 @@ type PayExec interface {
 	GetBrokerAddr() common.Address
 	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error)
 	SetClient(client *ethclient.Client)
+	NewTokenBucket(tokens int, refillRate float64)
 }
 
 type PaySummaryAux struct {
@@ -48,13 +48,6 @@ type PaySummaryAux struct {
 	TotalAmount   string `json:"totalAmount"`
 	ChainId       int64  `json:"chainId"`
 	MultiPayCtrct string `json:"multiPayCtrct"`
-}
-
-// rate limit RPC calls
-type RPCTokenBucket struct {
-	tokens     int
-	refillRate int
-	mu         sync.Mutex
 }
 
 type BrokerPaySignatureReqAux struct {
@@ -69,42 +62,12 @@ type basePayExec struct {
 	MultipayCtrctAddr string
 	ChainId           int64
 	Client            *ethclient.Client
-	RPCTokenBucket    RPCTokenBucket
+	RPCTokenBucket    TokenBucket
 }
 
 type RemotePayExec struct {
 	basePayExec
 	RemoteBrkrUrl string
-}
-
-func (exc *basePayExec) NewTokenBucket(tokens, refillRate int) {
-	exc.RPCTokenBucket = RPCTokenBucket{
-		tokens:     tokens,
-		refillRate: refillRate,
-	}
-	exc.RPCTokenBucket.refill()
-}
-
-func (bucket *RPCTokenBucket) refill() {
-	for range time.Tick(time.Second / time.Duration(bucket.refillRate)) {
-		bucket.mu.Lock()
-		if bucket.tokens < 10 {
-			bucket.tokens++
-		}
-		bucket.mu.Unlock()
-	}
-}
-
-func (bucket *RPCTokenBucket) getToken() bool {
-	bucket.mu.Lock()
-	defer bucket.mu.Unlock()
-
-	if bucket.tokens > 0 {
-		bucket.tokens--
-		return true
-	}
-
-	return false
 }
 
 func (exc *basePayExec) GetBrokerAddr() common.Address {
@@ -113,6 +76,15 @@ func (exc *basePayExec) GetBrokerAddr() common.Address {
 
 func (exc *basePayExec) SetClient(client *ethclient.Client) {
 	exc.Client = client
+}
+
+func (exc *basePayExec) NewTokenBucket(capacity int, refillRate float64) {
+	exc.RPCTokenBucket = TokenBucket{
+		tokens:     capacity,
+		capacity:   capacity,
+		refillRate: refillRate,
+		lastRefill: time.Now(),
+	}
 }
 
 func (exc *RemotePayExec) Init(viper *viper.Viper, multiPayAddr string) error {
@@ -219,10 +191,10 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (st
 	}
 	_, sg, err := d8x_futures.CreatePaymentBrokerSignature(paydata, execWallet)
 	slog.Info("Querying broker signature...")
-	slog.Info("Token    = ", paydata.Token.String())
-	slog.Info("Broker   = ", paydata.Payer.String())
-	slog.Info("Multipay = ", paydata.MultiPayCtrct.String())
-	slog.Info("Amount   = ", paydata.TotalAmount.String())
+	slog.Info("Token    = " + paydata.Token.String())
+	slog.Info("Broker   = " + paydata.Payer.String())
+	slog.Info("Multipay = " + paydata.MultiPayCtrct.String())
+	slog.Info("Amount   = " + paydata.TotalAmount.String())
 
 	var p = BrokerPaySignatureReqAux{
 		Payment: PaySummaryAux{
@@ -312,6 +284,7 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	sigTrim := strings.TrimPrefix(sig, "0x")
 	exc.waitForToken("DelegatedPay")
 	tx, err := mpay.DelegatedPay(auth, s, common.Hex2Bytes(sigTrim), amounts, payees, msg)
+
 	if err != nil {
 		slog.Error(err.Error())
 		return "", err
@@ -320,12 +293,13 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 }
 
 func (exc *RemotePayExec) waitForToken(topic string) {
-	for !exc.RPCTokenBucket.getToken() {
-		// Wait for 1 second plus a random duration between 0 and 500 milliseconds
-		waitDuration := time.Second + time.Duration(rand.Intn(500))*time.Millisecond
-		msg := fmt.Sprintf(topic+": waiting for RPC token %v\n", waitDuration)
-		slog.Info(msg)
-		time.Sleep(waitDuration)
+	for {
+		if exc.RPCTokenBucket.Take() {
+			slog.Info(topic + ": rpc token obtained")
+			return
+		}
+		slog.Info(topic + ": too many RPC requests, slowing down ")
+		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	}
 }
 

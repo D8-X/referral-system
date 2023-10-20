@@ -153,7 +153,8 @@ func (a *App) ProcessAllPayments() error {
 	// Filter blockchain events to confirm payments
 	a.SavePayments()
 	a.PurgeUnconfirmedPayments()
-
+	// Create a token bucket with a limit of 10 tokens and a refill rate of 5 tokens per second
+	a.PaymentExecutor.NewTokenBucket(10, 5)
 	// determine batch timestamp
 	var batchTs string
 

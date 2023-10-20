@@ -10,6 +10,7 @@ import (
 	"log"
 	"log/slog"
 	"math/big"
+	"math/rand"
 	"net/http"
 	"referral-system/env"
 	"referral-system/src/contracts"
@@ -35,6 +36,7 @@ type PayExec interface {
 	GetBrokerAddr() common.Address
 	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error)
 	SetClient(client *ethclient.Client)
+	NewTokenBucket(tokens int, refillRate float64)
 }
 
 type PaySummaryAux struct {
@@ -47,6 +49,7 @@ type PaySummaryAux struct {
 	ChainId       int64  `json:"chainId"`
 	MultiPayCtrct string `json:"multiPayCtrct"`
 }
+
 type BrokerPaySignatureReqAux struct {
 	Payment           PaySummaryAux `json:"payment"`
 	ExecutorSignature string        `json:"signature"`
@@ -59,6 +62,7 @@ type basePayExec struct {
 	MultipayCtrctAddr string
 	ChainId           int64
 	Client            *ethclient.Client
+	RPCTokenBucket    TokenBucket
 }
 
 type RemotePayExec struct {
@@ -72,6 +76,15 @@ func (exc *basePayExec) GetBrokerAddr() common.Address {
 
 func (exc *basePayExec) SetClient(client *ethclient.Client) {
 	exc.Client = client
+}
+
+func (exc *basePayExec) NewTokenBucket(capacity int, refillRate float64) {
+	exc.RPCTokenBucket = TokenBucket{
+		tokens:     capacity,
+		capacity:   capacity,
+		refillRate: refillRate,
+		lastRefill: time.Now(),
+	}
 }
 
 func (exc *RemotePayExec) Init(viper *viper.Viper, multiPayAddr string) error {
@@ -177,10 +190,11 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (st
 		return "", errors.New("error creating wallet:" + err.Error())
 	}
 	_, sg, err := d8x_futures.CreatePaymentBrokerSignature(paydata, execWallet)
-	fmt.Println("Token    = ", paydata.Token.String())
-	fmt.Println("Broker   = ", paydata.Payer.String())
-	fmt.Println("Multipay = ", paydata.MultiPayCtrct.String())
-	fmt.Println("Amount   = ", paydata.TotalAmount.String())
+	slog.Info("Querying broker signature...")
+	slog.Info("Token    = " + paydata.Token.String())
+	slog.Info("Broker   = " + paydata.Payer.String())
+	slog.Info("Multipay = " + paydata.MultiPayCtrct.String())
+	slog.Info("Amount   = " + paydata.TotalAmount.String())
 
 	var p = BrokerPaySignatureReqAux{
 		Payment: PaySummaryAux{
@@ -213,6 +227,7 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (st
 		slog.Error("Error reading response body:" + err.Error())
 		return "", err
 	}
+	slog.Info("Remote broker signature obtained.")
 	type Response struct {
 		BrokerSignature string `json:"brokerSignature"`
 		Error           string `json:"error"`
@@ -243,6 +258,7 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	if t.String() != payment.TotalAmount.String() {
 		return "", errors.New("total amount must be sum of amounts")
 	}
+	exc.waitForToken("auth")
 	auth, err := exc.CreateAuth()
 	if err != nil {
 		slog.Error("Pay: Could not create auth: " + err.Error())
@@ -266,13 +282,25 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	}
 	auth.GasLimit = 5000000
 	sigTrim := strings.TrimPrefix(sig, "0x")
+	exc.waitForToken("DelegatedPay")
 	tx, err := mpay.DelegatedPay(auth, s, common.Hex2Bytes(sigTrim), amounts, payees, msg)
-	//tx, err := mpay.Pay(auth, s.Id, s.Token, amounts, payees, msg)
+
 	if err != nil {
 		slog.Error(err.Error())
 		return "", err
 	}
 	return tx.Hash().Hex(), nil
+}
+
+func (exc *RemotePayExec) waitForToken(topic string) {
+	for {
+		if exc.RPCTokenBucket.Take() {
+			slog.Info(topic + ": rpc token obtained")
+			return
+		}
+		slog.Info(topic + ": too many RPC requests, slowing down ")
+		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
+	}
 }
 
 func privateKeyToAddress(k *ecdsa.PrivateKey) (string, error) {

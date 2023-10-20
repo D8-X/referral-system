@@ -33,7 +33,6 @@ func Run() {
 	}
 	pk := utils.LoadFromFile(v.GetString(env.KEYFILE_PATH)+"keyfile.txt", abc)
 	v.Set(env.BROKER_KEY, pk)
-	fmt.Println(v.GetString(env.BROKER_KEY))
 	var app referral.App
 	s := v.GetString(env.REMOTE_BROKER_HTTP)
 	slog.Info("remote broker", "url", s)

@@ -73,7 +73,7 @@ func Run() {
 	var wg sync.WaitGroup
 	if hasFinished, _ := app.DbGetPaymentExecHasFinished(); !hasFinished || app.IsPaymentDue() {
 		// application crashed before payment was finalized, so restart
-		go app.ProcessAllPayments()
+		go app.ProcessAllPayments(false)
 	}
 	wg.Add(1)
 	go api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT), &wg)

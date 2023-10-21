@@ -104,7 +104,7 @@ func (a *App) SchedulePayment() {
 
 		// Execute
 		fmt.Println("Payment is now due, executing...")
-		err := a.ProcessAllPayments()
+		err := a.ProcessAllPayments(true)
 		if err != nil {
 			slog.Error("Error when processing payments:" + err.Error())
 		}
@@ -149,10 +149,13 @@ func (a *App) dbGetPayBatch() (bool, int64) {
 
 // ProcessAllPayments determins how much to pay and ultimately delegates
 // payment execution to payexec
-func (a *App) ProcessAllPayments() error {
+func (a *App) ProcessAllPayments(filterPayments bool) error {
 	// Filter blockchain events to confirm payments
-	a.SavePayments()
-	a.PurgeUnconfirmedPayments()
+	if filterPayments {
+		a.SavePayments()
+		a.PurgeUnconfirmedPayments()
+		slog.Info("Historical payment filtering done")
+	}
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
 	a.PaymentExecutor.NewTokenBucket(5, 3)
 	// determine batch timestamp
@@ -222,6 +225,7 @@ func (a *App) ProcessAllPayments() error {
 		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
 	}
 	// Filter blockchain events to confirm payments
+	slog.Info("Payment execution done, filtering payments")
 	a.SavePayments()
 
 	// schedule next payments

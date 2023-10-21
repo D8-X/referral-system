@@ -32,6 +32,7 @@ type App struct {
 }
 
 type Settings struct {
+	ChainId                int    `json:"chainId"`
 	PaymentMaxLookBackDays int    `json:"paymentMaxLookBackDays"`
 	PayCronSchedule        string `json:"paymentScheduleCron"`
 	MultiPayContractAddr   string `json:"multiPayContractAddr"`
@@ -155,17 +156,29 @@ func (a *App) New(viper *viper.Viper) error {
 // and returns the Setting struct
 func loadConfig(v *viper.Viper) (Settings, error) {
 	fileName := v.GetString(env.CONFIG_PATH)
-	var s Settings
+	var settings []Settings
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return Settings{}, err
 	}
-	err = json.Unmarshal(data, &s)
+	err = json.Unmarshal(data, &settings)
 	if err != nil {
 		return Settings{}, err
 	}
-	s.TokenX.Address = strings.ToLower(s.TokenX.Address)
-	return s, nil
+	// pick correct setting by chain id
+	var setting Settings = Settings{}
+	targetChain := v.GetInt(env.CHAIN_ID)
+	for k := 0; k < len(settings); k++ {
+		if settings[k].ChainId == targetChain {
+			setting = settings[k]
+			break
+		}
+	}
+	if setting.ChainId != targetChain {
+		return Settings{}, errors.New("No setting found for chain id " + strconv.Itoa(targetChain))
+	}
+	setting.TokenX.Address = strings.ToLower(setting.TokenX.Address)
+	return setting, nil
 }
 
 // loadRPCConfig loads the RPC list for the

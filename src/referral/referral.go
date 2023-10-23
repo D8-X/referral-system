@@ -449,7 +449,7 @@ func (a *App) CutPercentageCode(code string) (float64, error) {
 	var traderCut float64
 	err := a.Db.QueryRow(query, code).Scan(&refAddr, &traderCut)
 	if err != nil {
-		slog.Info("CutPercentageCode code lookup failed for " + code + ": " + err.Error())
+		//no log
 		return 0, errors.New("Could not identify code")
 	}
 

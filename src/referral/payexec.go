@@ -227,7 +227,7 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (st
 		slog.Error("Error reading response body:" + err.Error())
 		return "", err
 	}
-	slog.Info("Remote broker signature obtained.")
+	slog.Info("Remote broker response obtained.")
 	type Response struct {
 		BrokerSignature string `json:"brokerSignature"`
 		Error           string `json:"error"`

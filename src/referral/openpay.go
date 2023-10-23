@@ -118,8 +118,8 @@ func (a *App) IsPaymentDue() bool {
 	}
 	ts := time.Unix(batchTime, 0)
 	prevTime := utils.PrevPaymentSchedule(a.Settings.PayCronSchedule)
-	slog.Info("Last payment due  time: " + prevTime.Format("2006-01-02 15:04:05"))
-	slog.Info("Last payment exec time: " + ts.Format("2006-01-02 15:04:05"))
+	slog.Info("Last payment due time: " + prevTime.Format("2006-01-02 15:04:05"))
+	slog.Info("Last payment batch execution time: " + ts.Format("2006-01-02 15:04:05"))
 
 	return prevTime.After(ts)
 }

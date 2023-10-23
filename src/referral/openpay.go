@@ -9,6 +9,7 @@ import (
 	"referral-system/env"
 	"referral-system/src/utils"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -218,7 +219,11 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 			codePaths[el.Code] = chain
 		}
 		// process
-		a.processPayment(el, codePaths[el.Code], batchTs)
+		err = a.processPayment(el, codePaths[el.Code], batchTs)
+		if err != nil {
+			slog.Info("aborting payments...")
+			break
+		}
 	}
 	err = a.DbSetPaymentExecFinished(batchTs, true)
 	if err != nil {
@@ -233,7 +238,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	return nil
 }
 
-func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) {
+func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) error {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
 	payees := make([]common.Address, len(chain)+1)
 	amounts := make([]*big.Int, len(chain)+1)
@@ -264,9 +269,14 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
 	if err != nil {
 		slog.Error(err.Error())
-		return
+		if strings.Contains(err.Error(), "insufficient funds") {
+			return err
+		} else {
+			return nil
+		}
 	}
 	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash)
+	return nil
 }
 
 // DbGetReferralChainForCode gets the entire chain of referrals

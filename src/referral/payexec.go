@@ -172,7 +172,7 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 	slog.Info("Signature ok")
 	txHash, err := exc.Pay(payment, sig, amounts, payees, msg)
 	if err != nil {
-		slog.Error("Unable to create payment:" + err.Error())
+		slog.Error("Unable to pay:" + err.Error())
 		return "", err
 	}
 	slog.Info("Payment submitted tx hash = " + txHash)
@@ -286,7 +286,6 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	tx, err := mpay.DelegatedPay(auth, s, common.Hex2Bytes(sigTrim), amounts, payees, msg)
 
 	if err != nil {
-		slog.Error(err.Error())
 		return "", err
 	}
 	return tx.Hash().Hex(), nil

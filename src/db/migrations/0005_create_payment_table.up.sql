@@ -15,7 +15,7 @@ CREATE TABLE if not exists "referral_payment" (
     "block_nr" BIGINT,
     "block_ts" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "tx_confirmed" BOOLEAN NOT NULL DEFAULT false,
-    CONSTRAINT "referral_payment_pkey" PRIMARY KEY ("trader_addr", "payee_addr", "pool_id","batch_ts")
+    CONSTRAINT "referral_payment_pkey" PRIMARY KEY ("trader_addr", "payee_addr", "pool_id", "code", "batch_ts")
 );
 
 -- CreateIndex

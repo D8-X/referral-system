@@ -128,7 +128,7 @@ func (exc *RemotePayExec) Init(viper *viper.Viper, multiPayAddr string) error {
 }
 
 func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) {
-	slog.Info("transact " + msg + ", batch " + strconv.FormatInt(id, 10))
+	slog.Info("transact " + msg + ", last trade " + strconv.FormatInt(id, 10))
 	for k := 0; k < len(payees); k++ {
 		slog.Info(" -- Payee " + payees[k].String())
 		slog.Info("    Amount (decN)" + amounts[k].String())

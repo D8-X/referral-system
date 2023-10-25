@@ -132,6 +132,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	*/
 	blockTimestamps := make(map[uint64]uint64)
 	var logs []PaymentLog
+	countDefaultCode := 0
 	for {
 		if !multiPayPaymentIterator.Next() {
 			break // No more events to process
@@ -170,9 +171,14 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 			blockTimestamps[pay.BlockNumber] = t
 		}
 		pay.BlockTs = blockTimestamps[pay.BlockNumber]
-		slog.Info("Event Data for code " + pay.Code)
+		if pay.Code == "DEFAULT" {
+			countDefaultCode += 1
+		} else {
+			slog.Info("Event Data for code " + pay.Code)
+		}
 		logs = append(logs, pay)
 	}
+	slog.Info("Event Data for code DEFAULT " + strconv.Itoa(countDefaultCode) + "x")
 	// find unassigend block timestamps
 	for _, pay := range logs {
 		if pay.BlockTs == 0 {

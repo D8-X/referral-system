@@ -42,7 +42,7 @@ func FindBlockWithTs(client *ethclient.Client, ts uint64) (uint64, uint64, error
 		if tsA < ts {
 			break
 		}
-		timeEst = (tsB - tsA) / (numB - numA)
+		timeEst = max((tsB-tsA)/(numB-numA), 1)
 		tsB = tsA
 		numB = numA
 	}

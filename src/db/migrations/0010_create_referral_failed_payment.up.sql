@@ -14,7 +14,7 @@ CREATE TABLE if not exists "referral_failed_payment" (
     "tx_hash" TEXT NOT NULL,
     -- timestamp when payment was sent (not block ts)
     "ts" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "referral_failed_payment_pkey" PRIMARY KEY ("trader_addr", "payee_addr", "pool_id","batch_ts")
+    CONSTRAINT "referral_failed_payment_pkey" PRIMARY KEY ("trader_addr", "payee_addr", "pool_id", "code", "batch_ts")
 );
 
 -- CreateIndex

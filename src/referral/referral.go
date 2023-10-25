@@ -32,6 +32,7 @@ type App struct {
 }
 
 type Settings struct {
+	ChainId                int    `json:"chainId"`
 	PaymentMaxLookBackDays int    `json:"paymentMaxLookBackDays"`
 	PayCronSchedule        string `json:"paymentScheduleCron"`
 	MultiPayContractAddr   string `json:"multiPayContractAddr"`
@@ -122,12 +123,7 @@ func (a *App) New(viper *viper.Viper) error {
 	}
 	a.Rpc = rpcs
 
-	// decide whether we have a local broker or a remote broker
-	if viper.GetString(env.REMOTE_BROKER_HTTP) == "" {
-		a.PaymentExecutor = &LocalPayExec{}
-	} else {
-		a.PaymentExecutor = &RemotePayExec{}
-	}
+	a.PaymentExecutor = &RemotePayExec{}
 	err = a.PaymentExecutor.Init(viper, a.Settings.MultiPayContractAddr)
 	if err != nil {
 		return err
@@ -160,17 +156,29 @@ func (a *App) New(viper *viper.Viper) error {
 // and returns the Setting struct
 func loadConfig(v *viper.Viper) (Settings, error) {
 	fileName := v.GetString(env.CONFIG_PATH)
-	var s Settings
+	var settings []Settings
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return Settings{}, err
 	}
-	err = json.Unmarshal(data, &s)
+	err = json.Unmarshal(data, &settings)
 	if err != nil {
 		return Settings{}, err
 	}
-	s.TokenX.Address = strings.ToLower(s.TokenX.Address)
-	return s, nil
+	// pick correct setting by chain id
+	var setting Settings = Settings{}
+	targetChain := v.GetInt(env.CHAIN_ID)
+	for k := 0; k < len(settings); k++ {
+		if settings[k].ChainId == targetChain {
+			setting = settings[k]
+			break
+		}
+	}
+	if setting.ChainId != targetChain {
+		return Settings{}, errors.New("No setting found for chain id " + strconv.Itoa(targetChain))
+	}
+	setting.TokenX.Address = strings.ToLower(setting.TokenX.Address)
+	return setting, nil
 }
 
 // loadRPCConfig loads the RPC list for the
@@ -423,6 +431,10 @@ func (a *App) CutPercentageAgency(addr string, holdingsDecN *big.Int) (float64, 
 		slog.Error("Error for CutPercentageAgency address " + addr)
 		return 0, false, errors.New("Could not get percentage")
 	}
+	if len(chain) == 0 && isAg {
+		// broker
+		return 100, true, nil
+	}
 	return 100 * chain[len(chain)-1].ChildAvail, isAg, nil
 
 }
@@ -437,7 +449,7 @@ func (a *App) CutPercentageCode(code string) (float64, error) {
 	var traderCut float64
 	err := a.Db.QueryRow(query, code).Scan(&refAddr, &traderCut)
 	if err != nil {
-		slog.Error("Error for CutPercentageCode code " + code)
+		//no log
 		return 0, errors.New("Could not identify code")
 	}
 

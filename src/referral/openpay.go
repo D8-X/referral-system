@@ -9,6 +9,7 @@ import (
 	"referral-system/env"
 	"referral-system/src/utils"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -104,7 +105,7 @@ func (a *App) SchedulePayment() {
 
 		// Execute
 		fmt.Println("Payment is now due, executing...")
-		err := a.ProcessAllPayments()
+		err := a.ProcessAllPayments(true)
 		if err != nil {
 			slog.Error("Error when processing payments:" + err.Error())
 		}
@@ -118,8 +119,8 @@ func (a *App) IsPaymentDue() bool {
 	}
 	ts := time.Unix(batchTime, 0)
 	prevTime := utils.PrevPaymentSchedule(a.Settings.PayCronSchedule)
-	slog.Info("Last payment due  time: " + prevTime.Format("2006-01-02 15:04:05"))
-	slog.Info("Last payment exec time: " + ts.Format("2006-01-02 15:04:05"))
+	slog.Info("Last payment due time: " + prevTime.Format("2006-01-02 15:04:05"))
+	slog.Info("Last payment batch execution time: " + ts.Format("2006-01-02 15:04:05"))
 
 	return prevTime.After(ts)
 }
@@ -149,11 +150,15 @@ func (a *App) dbGetPayBatch() (bool, int64) {
 
 // ProcessAllPayments determins how much to pay and ultimately delegates
 // payment execution to payexec
-func (a *App) ProcessAllPayments() error {
+func (a *App) ProcessAllPayments(filterPayments bool) error {
 	// Filter blockchain events to confirm payments
-	a.SavePayments()
-	a.PurgeUnconfirmedPayments()
-
+	if filterPayments {
+		a.SavePayments()
+		a.PurgeUnconfirmedPayments()
+		slog.Info("Historical payment filtering done")
+	}
+	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
+	a.PaymentExecutor.NewTokenBucket(5, 3)
 	// determine batch timestamp
 	var batchTs string
 
@@ -214,13 +219,18 @@ func (a *App) ProcessAllPayments() error {
 			codePaths[el.Code] = chain
 		}
 		// process
-		a.processPayment(el, codePaths[el.Code], batchTs)
+		err = a.processPayment(el, codePaths[el.Code], batchTs)
+		if err != nil {
+			slog.Info("aborting payments...")
+			break
+		}
 	}
 	err = a.DbSetPaymentExecFinished(batchTs, true)
 	if err != nil {
 		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
 	}
 	// Filter blockchain events to confirm payments
+	slog.Info("Payment execution done, filtering payments")
 	a.SavePayments()
 
 	// schedule next payments
@@ -228,7 +238,7 @@ func (a *App) ProcessAllPayments() error {
 	return nil
 }
 
-func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) {
+func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) error {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
 	payees := make([]common.Address, len(chain)+1)
 	amounts := make([]*big.Int, len(chain)+1)
@@ -237,9 +247,7 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	payees[0] = common.HexToAddress(row.TraderAddr)
 	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail)
 	distributed := new(big.Int).Set(amounts[0])
-	// we start at 2 (after trader and broker), to set the broker amount to the
-	// remainder (to avoid floating point rounding issues)
-	for k := 2; k < len(chain); k++ {
+	for k := 1; k < len(chain); k++ {
 		el := chain[k]
 		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay)
 		amounts[k+1] = amount
@@ -261,9 +269,14 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
 	if err != nil {
 		slog.Error(err.Error())
-		return
+		if strings.Contains(err.Error(), "insufficient funds") {
+			return err
+		} else {
+			return nil
+		}
 	}
 	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash)
+	return nil
 }
 
 // DbGetReferralChainForCode gets the entire chain of referrals

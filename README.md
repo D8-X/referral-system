@@ -1,82 +1,36 @@
-# referral-system
-Referral system
+# Referral System
+When trading with a __referral-code__, traders get a kick-back on the trading fees that they have paid, and __referrers__ (the creator of the code) also earn a share of these fees.
+The __whitelabelling partner__ (the entity that runs the front-end) can determine the share of trading fees that the referrer obtains and can make this a function of their token holdings.
+
+For example, whitelabelling partner "Pudgy Cow" can set the referral kick-back to 1% if the referrer holds more than 100 Pudgy tokens, and to 5% if they hold more than 1000 Pudgy tokens. The referrer can choose how much
+of the 5% (or so) kick-back the trader will receive and they get to keep. Anyone can be a referrer. Whitelabelling partners can set the token address and amount in the back-end configuration.
+
+Alternatively, whitelabelling partners can elect addresses that become an __agency__. Agencies can create referral-codes like a regular referrer and additionally they can elect a partner that then also becomes an agency.
+Agencies are not subject to the token configuration. 
+
+For example, whitelabelling partner "Pudgy Cow" selects marketing agency "Alpha Pots" as an agency and assigns a kick-back of 50%. Alpha Pots work with an influencer to which they hand-off 25% of the 50% kick-back, and they also have an affiliate
+agency that they elect as partner with a certain percentage of their 50%. The influencer creates a code which distributes 15% back to the trader. Hence the trader that uses the code receives 50% * 25% * 20% =2.5% fee reduction, the influencer 
+receives 50% * 25% * (1-20%) = 10% of the trader's fees, Alpha Pots get 50% * (1-25%)=37.5% and pudgy cow keeps 50% of the fees (checking: 2.5% + 10%+ 37.5% +50%=100%). Alpha Pots' affiliate agency can also elect a partner or
+create codes and we can imagine a similar story.
+
+Payments are performed automatically as scheduled by the whitelabelling partner. Configuration of the referral system at hand is detailed in the
+[D8X CLI repository](https://github.com/D8-X/d8x-cli/blob/main/README_CONFIG.md).
 
 # API
 
 <details>
 <summary>Definitions</summary>
-- The **broker** is an address that is specified in the backend settings and signs the trades and determines a 'broker fee' that the trader pays on their trade.
+  
+- The **broker** is an address that is specified in the backend settings and signs the trades and determines a 'broker fee' that the trader pays on their trade. It's the wallet of the 'whitelabelling partner'.
 - **Referral codes** will give the trader a rebate on their broker fees that they get paid out as scheduled in the backend (e.g., once a week). The creator of the code also gets a cut of the fees that the trader paid.
 - An **agency** is an address that refer to other addresses that then become agencies. If such a downstream agency creates a code, all agencies in the chain earn in relative terms from the trading fees paid by the trader that is using the referral code. The broker is an agency. 
   - Consequently, the broker is the root agency for all agencies. 
   - An agency can refer to many other addresses and make them an agency. 
   - No loops: An agency can only be referred to by one agency.
 - A **referrer** is an address that created a code. A code can be created by anyone. If the code was created by an agency, the rebate depends on the entire chain of agencies and the code's specific pass-on percentage. If the code was created by an address that is not an agency, the trader rebate and referrer cut depends on the referrer's token holdings as specified in the broker backend settings.
+  
 </details>
-
-
-<details>
-<summary>Temporary request</summary>
-http://127.0.0.1:8000/food-chain?code=ABCD
-
-This will probably be removed: it shows the entire food chain
-of a code.
-
-```
-[
-  {
-    "parent": "0x21B864083eedF1a4279dA1a9A7B1321E6102fD39",
-    "child": "0xCCC864083eedF1a4279dA1a9A7B1321E6102fD39",
-    "passOnDec": 0.8,
-    "level": 5,
-    "parentPayDec": 0.2,
-    "childAvailDec": 0.8
-  },
-  {
-    "parent": "0xCCC864083eedF1a4279dA1a9A7B1321E6102fD39",
-    "child": "0x20ec1a4332140f26d7b910554e3baaa429ca3756",
-    "passOnDec": 0.1,
-    "level": 4,
-    "parentPayDec": 0.72,
-    "childAvailDec": 0.08
-  },
-  {
-    "parent": "0x20ec1a4332140f26d7b910554e3baaa429ca3756",
-    "child": "0x5A09217F6D36E73eE5495b430e889f8c57876Ef3",
-    "passOnDec": 0.05,
-    "level": 3,
-    "parentPayDec": 0.076,
-    "childAvailDec": 0.004
-  },
-  {
-    "parent": "0x5a09217f6d36e73ee5495b430e889f8c57876ef3",
-    "child": "0x863ad9ce46acf07fd9390147b619893461036194",
-    "passOnDec": 0.0225,
-    "level": 2,
-    "parentPayDec": 0.00391,
-    "childAvailDec": 0.00009
-  },
-  {
-    "parent": "0x863ad9ce46acf07fd9390147b619893461036194",
-    "child": "0x6fe871703eb23771c4016eb62140367944e8edfc",
-    "passOnDec": 0.15,
-    "level": 1,
-    "parentPayDec": 0.0000765,
-    "childAvailDec": 0.0000135
-  },
-  {
-    "parent": "0x6fe871703eb23771c4016eb62140367944e8edfc",
-    "child": "FREEMATIC",
-    "passOnDec": 0.0333,
-    "level": 0,
-    "parentPayDec": 0.00001305045,
-    "childAvailDec": 4.4955e-7
-  }
-]
-```
-</details>
-
-
+  
 ## Get request: get all directly referred 'partners'
 Who are my partners/codes that I assigned as an agency/referrer
 and how much from my percentage cut do I pass on?

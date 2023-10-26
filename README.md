@@ -13,7 +13,8 @@ agency that they elect as partner with a certain percentage of their 50%. The in
 receives 50% * 25% * (1-20%) = 10% of the trader's fees, Alpha Pots get 50% * (1-25%)=37.5% and pudgy cow keeps 50% of the fees (checking: 2.5% + 10%+ 37.5% +50%=100%). Alpha Pots' affiliate agency can also elect a partner or
 create codes and we can imagine a similar story.
 
-Payments are performed automatically as scheduled by the whitelabelling partner.
+Payments are performed automatically as scheduled by the whitelabelling partner. Configuration of the referral system at hand is detailed in the
+[D8X CLI repository](https://github.com/D8-X/d8x-cli/blob/main/README_CONFIG.md).
 
 # API
 

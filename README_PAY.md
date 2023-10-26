@@ -1,6 +1,6 @@
 # Payment Execution
 
-Payment execution is scheduled according to a CRON-synthax, for example every 3rd weekday at 14:00 UTC: `"paymentScheduleCron": "0 14 * * 2"`.
+Payment execution is scheduled according to a CRON-syntax, for example every 3rd weekday at 14:00 UTC: `"paymentScheduleCron": "0 14 * * 2"`.
 
 When executing payments, a batch timestamp is determined. This timestamp is stored in the database, together with the flag
 whether the payment has finished or not. If the system crashes and it detects an unfinished payment in the database, 

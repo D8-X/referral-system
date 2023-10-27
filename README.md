@@ -8,7 +8,7 @@ of the 5% (or so) kick-back the trader will receive and they get to keep. Anyone
 Alternatively, whitelabelling partners can elect addresses that become an __agency__. Agencies can create referral-codes like a regular referrer and additionally they can elect a partner that then also becomes an agency.
 Agencies are not subject to the token configuration. 
 
-For example, whitelabelling partner "Pudgy Cow" selects marketing agency "Alpha Pots" as an agency and assigns a kick-back of 50%. Alpha Pots work with an influencer to which they hand-off 25% of the 50% kick-back, and they also have an affiliate
+For example, whitelabelling partner Pudgy Cow selects marketing agency "Alpha Pots" as an agency and assigns a kick-back of 50%. Alpha Pots work with an influencer to which they hand-off 25% of the 50% kick-back, and they also have an affiliate
 agency that they elect as partner with a certain percentage of their 50%. The influencer creates a code which distributes 15% back to the trader. Hence the trader that uses the code receives 50% * 25% * 20% =2.5% fee reduction, the influencer 
 receives 50% * 25% * (1-20%) = 10% of the trader's fees, Alpha Pots get 50% * (1-25%)=37.5% and pudgy cow keeps 50% of the fees (checking: 2.5% + 10%+ 37.5% +50%=100%). Alpha Pots' affiliate agency can also elect a partner or
 create codes and we can imagine a similar story.

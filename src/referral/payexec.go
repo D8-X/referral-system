@@ -35,6 +35,7 @@ type PayExec interface {
 	Init(viper *viper.Viper, multiPayAddr string) error
 	GetBrokerAddr() common.Address
 	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error)
+	GetExecutorAddrHex() string
 	SetClient(client *ethclient.Client)
 	NewTokenBucket(tokens int, refillRate float64)
 }
@@ -133,6 +134,11 @@ func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []com
 		slog.Info(" -- Payee " + payees[k].String())
 		slog.Info("    Amount (decN)" + amounts[k].String())
 	}
+}
+
+func (exc *RemotePayExec) GetExecutorAddrHex() string {
+	execAddr, _ := privateKeyToAddress(exc.ExecPrivKey)
+	return execAddr
 }
 
 func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error) {

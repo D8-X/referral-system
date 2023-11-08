@@ -200,6 +200,15 @@ a code selected:
 no code:
 `{"type":"my-code-selection","data":""}`
 
+## Get request: broker and executor address
+http://127.0.0.1:8000/executor
+```
+{
+  "executorAddress":"0x3ef256282e578c5D97a7231C3C046F19b1E50855",
+  "brokerAddress":"0xb4111Fe4659057B01B28c3ff9Eb1349Fbf105e67"
+}
+```
+
 ## Post: Select a referral code as a trader
 
 http://127.0.0.1:8000/select-code

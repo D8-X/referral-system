@@ -462,3 +462,24 @@ func onNextPay(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	}
 	w.Write(jsonResponse)
 }
+
+func onExecutor(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	excAddr := app.PaymentExecutor.GetExecutorAddrHex()
+	brkrAddr := app.PaymentExecutor.GetBrokerAddr()
+	type Res struct {
+		ExecutorAddr string `json:"executorAddr"`
+		BrokerAddr   string `json:"brokerAddr"`
+	}
+	info := Res{
+		ExecutorAddr: excAddr,
+		BrokerAddr:   brkrAddr.String(),
+	}
+	jsonResponse, err := json.Marshal(info)
+	if err != nil {
+		slog.Error("onExecutor unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResponse)
+}

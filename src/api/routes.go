@@ -60,6 +60,10 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 		onRefer(w, r, app)
 	})
 
+	router.Get("/executor", func(w http.ResponseWriter, r *http.Request) {
+		onExecutor(w, r, app)
+	})
+
 	router.Post("/upsert-code", func(w http.ResponseWriter, r *http.Request) {
 		onUpsertCode(w, r, app)
 	})

@@ -261,8 +261,8 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	amounts[1] = new(big.Int).Set(totalDecN)
 	amounts[1].Sub(amounts[1], distributed)
 
-	// encode message: batchTs.<code>.<poolId>
-	msg := batchTs + "." + row.Code + "." + strconv.Itoa(int(row.PoolId))
+	// encode message: batchTs.<code>.<poolId>.<encodingversion>
+	msg := encodePaymentInfo(batchTs, row.Code, int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
 	a.PaymentExecutor.SetClient(a.RpcClient)

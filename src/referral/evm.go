@@ -141,10 +141,18 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		event := multiPayPaymentIterator.Event
 
 		// decode pool Id from message, and timestamp from event id
-		s := strings.Split(event.Message, ".")
-		if len(s) != 3 {
-			slog.Info("- event message in different format")
-			continue
+		var msg string
+		var s []string
+		if !isMsgVersionCurrent(event.Message) {
+			// format is batchTs.<code>.<poolId> with onubstructed code
+			s = strings.Split(event.Message, ".")
+			if len(s) != 3 {
+				slog.Info("- event message batch timestamp not in expected format")
+				continue
+			}
+		} else {
+			msg = deObstructMsg(event.Message)
+			s = strings.Split(msg, ".")
 		}
 		pay.BatchTimestamp, err = strconv.Atoi(s[0])
 		if err != nil {

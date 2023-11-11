@@ -2,6 +2,7 @@ package referral
 
 import (
 	"math/rand"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -101,6 +102,19 @@ func encodePaymentInfo(batchTs string, code string, poolId int) string {
 	return obstructMsg(msg)
 }
 
+func decodePaymentInfo(msg string) []string {
+	if isV0Pattern(msg) {
+		// format is batchTs.<code>.<poolId> with unobstructed code
+		return strings.Split(msg, ".")
+	}
+	if isV1Pattern(msg) {
+		// format is batchTs.<code>.<poolId>.<encodingversion> with unobstructed code
+		msg = deObstructMsg(msg)
+		return strings.Split(msg, ".")
+	}
+	return nil
+}
+
 func isMsgVersionCurrent(msg string) bool {
 	s := strings.Split(msg, ".")
 	if len(s) != 4 {
@@ -111,4 +125,18 @@ func isMsgVersionCurrent(msg string) bool {
 		return false
 	}
 	return v == ENCODING_VERSION
+}
+
+func isV1Pattern(msg string) bool {
+	//batchTs.<code>.<poolId>.<encodingversion>
+	pattern := `^\d+\.[A-Z0-9_-]+\.\d+\.\d+$`
+	regex := regexp.MustCompile(pattern)
+	return regex.MatchString(msg) && isMsgVersionCurrent(msg)
+}
+
+func isV0Pattern(msg string) bool {
+	//batchTs.<code>.<poolId>
+	pattern := `^\d+\.[A-Z0-9_-]+\.\d+$`
+	regex := regexp.MustCompile(pattern)
+	return regex.MatchString(msg)
 }

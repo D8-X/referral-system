@@ -98,6 +98,7 @@ type DbPayment struct {
 	TraderAddr   string
 	PayeeAddr    string
 	Code         string
+	Level        int
 	PoolId       int
 	BatchTs      time.Time
 	PaidAmountCC string
@@ -320,7 +321,7 @@ func (a *App) SavePayments() error {
 // confirmed on-chain. Must run after 'SavePayments'
 func (a *App) PurgeUnconfirmedPayments() error {
 	query := `select trader_addr, payee_addr, 
-				code, pool_id, batch_ts, paid_amount_cc, 
+				code, level, pool_id, batch_ts, paid_amount_cc, 
 				tx_hash, block_ts
 				from referral_payment rp 
 			where tx_confirmed = false;`
@@ -330,17 +331,17 @@ func (a *App) PurgeUnconfirmedPayments() error {
 		return err
 	}
 	var row DbPayment
+	var idx = 0
 	for rows.Next() {
-		rows.Scan(&row.TraderAddr, &row.PayeeAddr, &row.Code, &row.PoolId, &row.BatchTs, &row.PaidAmountCC,
+		rows.Scan(&row.TraderAddr, &row.PayeeAddr, &row.Code, &row.Level, &row.PoolId, &row.BatchTs, &row.PaidAmountCC,
 			&row.TxHash, &row.BlockTs)
 		slog.Info("Could not confirm payment tx, moving to failed payments tx hash = " + row.TxHash)
 		query = `INSERT INTO referral_failed_payment
-			(trader_addr, payee_addr, 
-			 code, pool_id, batch_ts, paid_amount_cc, 
-			 tx_hash, ts)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
-		_, err := a.Db.Exec(query, row.TraderAddr, row.PayeeAddr, row.Code, row.PoolId, row.BatchTs, row.PaidAmountCC,
+			(trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, ts)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+		_, err := a.Db.Exec(query, row.TraderAddr, row.PayeeAddr, row.Code, row.Level, row.PoolId, row.BatchTs, row.PaidAmountCC,
 			row.TxHash, row.BlockTs)
+		idx++
 		if err != nil {
 			slog.Error("Could not insert tx to failed tx " + row.TxHash + ": " + err.Error())
 		}
@@ -477,14 +478,14 @@ func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, paye
 	slog.Info("Inserting Payment TX in DB")
 	t, _ := strconv.Atoi(batchTs)
 	ts := time.Unix(int64(t), 0)
-	query := `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	query := `INSERT INTO referral_payment (trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 	for k := 0; k < len(payees); k++ {
 		if amounts[k].BitLen() == 0 {
 			// we don't write 0 amounts to the database
 			continue
 		}
-		_, err := a.Db.Exec(query, traderAddr, payees[k].String(), code, poolId, ts, amounts[k].String(), tx)
+		_, err := a.Db.Exec(query, traderAddr, payees[k].String(), code, k, poolId, ts, amounts[k].String(), tx)
 		if err != nil {
 			slog.Error("Could not insert tx to db for trader " + traderAddr + ": " + err.Error())
 		}
@@ -500,15 +501,19 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	}
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
-	query := "SELECT tx_confirmed FROM referral_payment " +
-		"WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3 AND pool_id=$4"
+	query := `SELECT tx_confirmed FROM referral_payment 
+			  WHERE lower(trader_addr) = lower($1) 
+			  	AND lower(payee_addr) = lower($2) 
+				AND batch_ts = $3 
+				AND pool_id=$4
+				AND level=$5`
 	var isConfirmed bool
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId).Scan(&isConfirmed)
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed)
 	if err == sql.ErrNoRows {
 		// insert
-		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, block_ts, tx_confirmed)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, p.PoolId, utcBatchTime, p.AmountDecN[payIdx].String(), p.TxHash, p.BlockNumber, utcBlockTime, true)
+		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, block_ts, tx_confirmed)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, payIdx, p.PoolId, utcBatchTime, p.AmountDecN[payIdx].String(), p.TxHash, p.BlockNumber, utcBlockTime, true)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
@@ -518,8 +523,11 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		// set tx confirmed to true
 		query = `UPDATE referral_payment 
 				SET tx_confirmed = true, block_nr = $4, block_ts = $5
-				WHERE lower(trader_addr) = lower($1) AND lower(payee_addr) = lower($2) AND batch_ts = $3`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, p.BlockNumber, utcBlockTime)
+				WHERE lower(trader_addr) = lower($1) 
+					AND lower(payee_addr) = lower($2) 
+					AND batch_ts = $3
+					AND level = $4`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}

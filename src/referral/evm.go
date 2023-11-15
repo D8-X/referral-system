@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"referral-system/src/contracts"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -141,9 +140,9 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		event := multiPayPaymentIterator.Event
 
 		// decode pool Id from message, and timestamp from event id
-		s := strings.Split(event.Message, ".")
-		if len(s) != 3 {
-			slog.Info("- event message in different format")
+		var s []string = decodePaymentInfo(event.Message)
+		if s == nil {
+			slog.Info("- event message not in expected format")
 			continue
 		}
 		pay.BatchTimestamp, err = strconv.Atoi(s[0])
@@ -178,7 +177,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		}
 		logs = append(logs, pay)
 	}
-	slog.Info("Event Data for code DEFAULT " + strconv.Itoa(countDefaultCode) + "x")
+	slog.Info("Event Data for code DEFAULT (" + strconv.Itoa(countDefaultCode) + " times)")
 	// find unassigend block timestamps
 	for _, pay := range logs {
 		if pay.BlockTs == 0 {

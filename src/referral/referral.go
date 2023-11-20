@@ -492,7 +492,7 @@ func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, paye
 	}
 }
 
-// writeDbPayment writes data from multiplay contract into the database
+// writeDbPayment writes data from multipay contract into the database
 // if there is already an entry for a given record which is not confirmed, it sets the confirmed flag to true
 // db keys are trader_addr, payee_addr, pool_id and batch_ts
 func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, payIdx int) error {

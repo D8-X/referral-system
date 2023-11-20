@@ -207,6 +207,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 			&el.LastTradeConsidered, &el.TokenAddr, &el.TokenDecimals)
 		el.BrokerFeeABDKCC = new(big.Int)
 		el.BrokerFeeABDKCC.SetString(fee, 10)
+		fmt.Println("fee=", el.BrokerFeeABDKCC)
 		aggrFeesPerTrader = append(aggrFeesPerTrader, el)
 
 		// determine referralchain for the code
@@ -240,16 +241,20 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 
 func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) error {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
+	fmt.Println("fee dec N=", totalDecN)
 	payees := make([]common.Address, len(chain)+1)
 	amounts := make([]*big.Int, len(chain)+1)
 	// order: trader, broker, [agent1, agent2, ...], referrer
 	// trader address must go first
+	precision := 6
 	payees[0] = common.HexToAddress(row.TraderAddr)
-	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail)
+	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail, precision)
+	fmt.Println("amount decN 0 ->", amounts[0])
 	distributed := new(big.Int).Set(amounts[0])
 	for k := 1; k < len(chain); k++ {
 		el := chain[k]
-		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay)
+		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay, precision)
+		fmt.Println("amount decN ->", amount)
 		amounts[k+1] = amount
 		payees[k+1] = common.HexToAddress(el.Parent)
 		distributed.Add(distributed, amount)
@@ -260,12 +265,17 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	// totalDecN = sum of distributed amounts
 	amounts[1] = new(big.Int).Set(totalDecN)
 	amounts[1].Sub(amounts[1], distributed)
+	fmt.Println("amount distributed ", distributed)
+	for _, a := range amounts {
+		fmt.Println("amount decN ", a)
+	}
 
 	// encode message: batchTs.<code>.<poolId>.<encodingversion>
 	msg := encodePaymentInfo(batchTs, row.Code, int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
 	a.PaymentExecutor.SetClient(a.RpcClient)
+
 	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
 	if err != nil {
 		slog.Error(err.Error())

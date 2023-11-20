@@ -49,7 +49,7 @@ func ABDKToFloat(num *big.Int) float64 {
 }
 
 // DecNTimesFloat multiplies a decimal-N number
-// with a fraction in decimal system. One application
+// with a fraction m>0 in decimal system. One application
 // is to get a relative share (e.g., 1%) of the
 // decimal-n number in the same decimal-n format
 func DecNTimesFloat(num *big.Int, m float64, precision int) *big.Int {

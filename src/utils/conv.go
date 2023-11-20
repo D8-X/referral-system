@@ -1,6 +1,9 @@
 package utils
 
-import "math/big"
+import (
+	"math"
+	"math/big"
+)
 
 // floatToDecN converts a floating point number to a decimal-n,
 // i.e., to num*10^decN
@@ -49,10 +52,15 @@ func ABDKToFloat(num *big.Int) float64 {
 // with a fraction in decimal system. One application
 // is to get a relative share (e.g., 1%) of the
 // decimal-n number in the same decimal-n format
-func DecNTimesFloat(num *big.Int, m float64) *big.Int {
-	numf := new(big.Float).SetInt(num)
-	mulf := new(big.Float).SetFloat64(m)
-	res := new(big.Float).Mul(mulf, numf)
-	resInt, _ := res.Int(nil)
-	return resInt
+func DecNTimesFloat(num *big.Int, m float64, precision int) *big.Int {
+	if m == 0 {
+		return big.NewInt(int64(0))
+	}
+	v := math.Pow(10, float64(precision))
+	mInt := int64(m * v)
+	mIntB := big.NewInt(mInt)
+	vB := big.NewInt(int64(v))
+	resPow := new(big.Int).Mul(num, mIntB)
+	res := new(big.Int).Div(resPow, vB)
+	return res
 }

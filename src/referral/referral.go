@@ -346,6 +346,8 @@ func (a *App) ConfirmPaymentTxs() {
 		// we have to try again
 		time.Sleep(time.Hour)
 		a.ConfirmPaymentTxs()
+	} else {
+		slog.Info("ConfirmPaymentTxs completed")
 	}
 }
 

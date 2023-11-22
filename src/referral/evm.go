@@ -18,6 +18,15 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+// TxStatus represents the status of a transaction
+type TxStatus int
+
+const (
+	TxNotFound  TxStatus = iota // 0
+	TxConfirmed                 // 1
+	TxFailed                    // 2
+)
+
 func (a *App) CreateRpcClient() error {
 	rnd := rand.Intn(len(a.Rpc))
 	var rpc *ethclient.Client
@@ -205,4 +214,32 @@ func getBlockTimestamp(blockNum uint64, client *ethclient.Client) uint64 {
 	} else {
 		return 0
 	}
+}
+
+// QueryTxStatus queries the rpc for the transaction status
+func QueryTxStatus(client *ethclient.Client, txHash string) TxStatus {
+	receipt, err := getTransactionReceipt(client, txHash)
+	if err != nil {
+		slog.Error("Could not obtain transaction " + txHash + " error:" + err.Error())
+		return TxNotFound
+	}
+	if receipt.Status == 1 {
+		return TxConfirmed
+	}
+	// Transaction failed
+	return TxFailed
+}
+
+func getTransactionReceipt(client *ethclient.Client, txHash string) (*types.Receipt, error) {
+	// Create the context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	h := common.HexToHash(txHash)
+	// Call eth_getTransactionReceipt RPC method
+	receipt, err := client.TransactionReceipt(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	return receipt, nil
 }

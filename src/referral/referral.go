@@ -291,6 +291,110 @@ func (a *App) DbGetMarginTkn() error {
 	return nil
 }
 
+// Queries payment transactions which have not been confirmed
+// for the latest batch, and asks the RPC for the tx status
+// On success we set the confirm flag in the db, on failure,
+// we delete and add to failed payments, if the query ends
+// without success, we will retry unless we are already
+// 3/4 days after execution
+func (a *App) ConfirmPaymentTxs() {
+	txs, ts := a.DBGetUnconfirmedPayTxForLastBatch()
+	var fail []string
+	var success []string
+	var doPurge bool = false
+	var hasTxNotFound bool = false
+	tsNow := time.Now().Unix()
+
+	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
+	// to throttle the RPC queries
+	bucket := TokenBucket{
+		tokens:     5,
+		capacity:   5,
+		refillRate: 3,
+		lastRefill: time.Now(),
+	}
+
+	for _, tx := range txs {
+		bucket.WaitForToken("ConfirmPaymentTxs")
+		status := QueryTxStatus(a.RpcClient, tx)
+		if status == TxFailed {
+			fail = append(fail, tx)
+			continue
+		}
+		if status == TxConfirmed {
+			success = append(success, tx)
+			continue
+		}
+		hasTxNotFound = true
+		// tx could not be found. Not on chain? RPC issues?
+		// only delete 2/3 days after batch ts
+		doPurge = tsNow-ts > 86400*2/3
+	}
+
+	a.DBSetPayTxsConfirmed(success)
+	numUnknown := strconv.Itoa(len(txs) - len(success) - len(fail))
+	slog.Info("Payment confirmation total : " + strconv.Itoa(len(txs)) + ", success: " + strconv.Itoa(len(success)) + ", fail: " + strconv.Itoa(len(fail)) + ", unknown :" + numUnknown)
+	if doPurge {
+		slog.Info("Deleting all unconfirmed payments")
+		a.PurgeUnconfirmedPayments(nil)
+	} else if len(fail) > 0 {
+		slog.Info("Deleting failed payments")
+		a.PurgeUnconfirmedPayments(fail)
+	}
+	if !doPurge && hasTxNotFound {
+		slog.Info("Re-scheduling ConfirmPaymentTxs")
+		// we have to try again
+		time.Sleep(time.Hour)
+		a.ConfirmPaymentTxs()
+	}
+}
+
+// DBGetUnconfirmedPayTxForLastBatch assembles an array of tx-ids ([]string)
+// for payments that have not been confirmed (in table referral_payment)
+// returns the tx-id string array and the timestamp of the batch
+func (a *App) DBGetUnconfirmedPayTxForLastBatch() ([]string, int64) {
+	query := `SELECT distinct(tx_hash),
+				rp.batch_ts
+				FROM referral_payment rp 
+				WHERE rp.tx_confirmed = false 
+				AND batch_ts IN (
+					SELECT max(rp2.batch_ts) as max_ts
+					FROM referral_payment rp2 
+				)`
+	rows, err := a.Db.Query(query)
+	defer rows.Close()
+	if err != nil {
+		slog.Error("Error in DBGetUnconfirmedPayTxForLastBatch:" + err.Error())
+		return []string{}, 0
+	}
+	var unTxs []string
+	var unixTimestamp int64
+	for rows.Next() {
+		var tx string
+		var batchTimestamp time.Time
+		rows.Scan(&tx, &batchTimestamp)
+		unixTimestamp = batchTimestamp.Unix()
+		unTxs = append(unTxs, tx)
+	}
+	return unTxs, unixTimestamp
+}
+
+// DBSetPayTxsConfirmed sets the confirmed flag in the DB table referral_payment for
+// a list of transactions to true
+func (a *App) DBSetPayTxsConfirmed(txHash []string) {
+	query := `UPDATE referral_payment
+			SET tx_confirmed = true
+			WHERE tx_hash = $1;`
+	for _, h := range txHash {
+		_, err := a.Db.Exec(query, h)
+		if err != nil {
+			slog.Error("Failed to set tx confirmed for tx=" + h + " error: " + err.Error())
+		} else {
+			slog.Info("Setting tx " + h + " to confirmed")
+		}
+	}
+}
+
 // SavePayments gets the payment events from on-chain and
 // updates or inserts database entries
 func (a *App) SavePayments() error {
@@ -318,8 +422,9 @@ func (a *App) SavePayments() error {
 }
 
 // PurgeUnconfirmedPayments deletes records from the database that could not be
-// confirmed on-chain. Must run after 'SavePayments'
-func (a *App) PurgeUnconfirmedPayments() error {
+// confirmed on-chain and are in txs list, adds them to failed payments table
+// If txs is nil, all unconfirmed payments (tx_confirmed = false) will be deleted
+func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 	query := `select trader_addr, payee_addr, 
 				code, level, pool_id, batch_ts, paid_amount_cc, 
 				tx_hash, block_ts
@@ -333,9 +438,19 @@ func (a *App) PurgeUnconfirmedPayments() error {
 	var row DbPayment
 	var idx = 0
 	for rows.Next() {
+		inDeleteList := txs == nil
 		rows.Scan(&row.TraderAddr, &row.PayeeAddr, &row.Code, &row.Level, &row.PoolId, &row.BatchTs, &row.PaidAmountCC,
 			&row.TxHash, &row.BlockTs)
-		slog.Info("Could not confirm payment tx, moving to failed payments tx hash = " + row.TxHash)
+		for _, tx := range txs {
+			if tx == row.TxHash {
+				inDeleteList = true
+				break
+			}
+		}
+		if !inDeleteList {
+			continue
+		}
+		slog.Info("Moving to failed payments tx hash = " + row.TxHash)
 		query = `INSERT INTO referral_failed_payment
 			(trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, ts)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
@@ -345,13 +460,14 @@ func (a *App) PurgeUnconfirmedPayments() error {
 		if err != nil {
 			slog.Error("Could not insert tx to failed tx " + row.TxHash + ": " + err.Error())
 		}
+		query = `DELETE FROM referral_payment rp
+			where tx_hash=$1`
+		_, err = a.Db.Query(query, row.TxHash)
+		if err != nil {
+			slog.Error("Could not delete unconfirmed payments:" + err.Error())
+		}
 	}
-	query = `DELETE FROM referral_payment rp
-			where tx_confirmed=false`
-	_, err = a.Db.Query(query)
-	if err != nil {
-		slog.Error("Could not delete unconfirmed payments:" + err.Error())
-	}
+
 	return nil
 }
 

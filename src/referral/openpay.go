@@ -154,7 +154,6 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	// Filter blockchain events to confirm payments
 	if filterPayments {
 		a.SavePayments()
-		a.PurgeUnconfirmedPayments()
 		slog.Info("Historical payment filtering done")
 	}
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
@@ -230,9 +229,12 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	if err != nil {
 		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
 	}
+	slog.Info("Payment execution done, waiting before confirming payments...")
+	// wait before we aim to confirm payments
+	time.Sleep(2 * time.Minute)
 	// Filter blockchain events to confirm payments
-	slog.Info("Payment execution done, filtering payments")
-	a.SavePayments()
+	slog.Info("Confirming payments")
+	a.ConfirmPaymentTxs()
 
 	// schedule next payments
 	a.SchedulePayment()

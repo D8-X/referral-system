@@ -9,6 +9,7 @@ import (
 
 func TestGetTransactionReceipt(t *testing.T) {
 	nodeURL := "https://rpc.public.zkevm-test.net"
+
 	txHashSucc := "0xa4aa3bdc545e9d5a1ef8b00798dbc51d02401a257cbb4b15c0e637db76a65eb4"
 	txHashFail := "0xbeb7bf7a32305172722d1469bd8fc050bbee2db2a012690e4280285584560fcf"
 	txHashInvented := "0xCAC7bf7a32305172722d1469bd8fc050bbee2db2a012690e4280285584560fcf"

@@ -63,8 +63,9 @@ func Run() {
 	}
 	nxt := utils.NextPaymentSchedule(app.Settings.PayCronSchedule)
 	slog.Info("Next payment due on " + nxt.Format("2006-January-02 15:04:05"))
+	// confirming payment transactions, if any
+	app.ConfirmPaymentTxs()
 	app.SavePayments()
-	app.PurgeUnconfirmedPayments()
 	err = app.DbGetMarginTkn()
 	if err != nil {
 		slog.Error("Error:" + err.Error())

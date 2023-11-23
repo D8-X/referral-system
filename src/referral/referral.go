@@ -112,12 +112,14 @@ type DbPayment struct {
 func (a *App) New(viper *viper.Viper) error {
 
 	// load settings
+	slog.Info("Loading configuration")
 	s, err := loadConfig(viper)
 	if err != nil {
 		return err
 	}
 	a.Settings = s
 
+	slog.Info("Loading RPC configuration")
 	rpcs, err := loadRPCConfig(viper)
 	if err != nil {
 		return err
@@ -125,12 +127,14 @@ func (a *App) New(viper *viper.Viper) error {
 	a.Rpc = rpcs
 
 	a.PaymentExecutor = &RemotePayExec{}
+	slog.Info("Init PaymentExecutor")
 	err = a.PaymentExecutor.Init(viper, a.Settings.MultiPayContractAddr)
 	if err != nil {
 		return err
 	}
 
 	// settings to database
+	slog.Info("Writing settings to DB")
 	err = a.SettingsToDB()
 	if err != nil {
 		return err
@@ -142,10 +146,12 @@ func (a *App) New(viper *viper.Viper) error {
 		return err
 	}
 
+	slog.Info("Create RPC Client")
 	err = a.CreateRpcClient()
 	if err != nil {
 		return err
 	}
+	slog.Info("Create Multipay Instance")
 	err = a.CreateMultipayInstance()
 	if err != nil {
 		return err

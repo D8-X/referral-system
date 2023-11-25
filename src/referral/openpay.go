@@ -154,7 +154,6 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	// Filter blockchain events to confirm payments
 	if filterPayments {
 		a.SavePayments()
-		a.PurgeUnconfirmedPayments()
 		slog.Info("Historical payment filtering done")
 	}
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
@@ -207,6 +206,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 			&el.LastTradeConsidered, &el.TokenAddr, &el.TokenDecimals)
 		el.BrokerFeeABDKCC = new(big.Int)
 		el.BrokerFeeABDKCC.SetString(fee, 10)
+		fmt.Println("fee=", el.BrokerFeeABDKCC)
 		aggrFeesPerTrader = append(aggrFeesPerTrader, el)
 
 		// determine referralchain for the code
@@ -229,9 +229,12 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	if err != nil {
 		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
 	}
+	slog.Info("Payment execution done, waiting before confirming payments...")
+	// wait before we aim to confirm payments
+	time.Sleep(2 * time.Minute)
 	// Filter blockchain events to confirm payments
-	slog.Info("Payment execution done, filtering payments")
-	a.SavePayments()
+	slog.Info("Confirming payments")
+	a.ConfirmPaymentTxs()
 
 	// schedule next payments
 	a.SchedulePayment()
@@ -244,12 +247,13 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	amounts := make([]*big.Int, len(chain)+1)
 	// order: trader, broker, [agent1, agent2, ...], referrer
 	// trader address must go first
+	precision := 6
 	payees[0] = common.HexToAddress(row.TraderAddr)
-	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail)
+	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail, precision)
 	distributed := new(big.Int).Set(amounts[0])
 	for k := 1; k < len(chain); k++ {
 		el := chain[k]
-		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay)
+		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay, precision)
 		amounts[k+1] = amount
 		payees[k+1] = common.HexToAddress(el.Parent)
 		distributed.Add(distributed, amount)
@@ -266,6 +270,7 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
 	a.PaymentExecutor.SetClient(a.RpcClient)
+
 	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
 	if err != nil {
 		slog.Error(err.Error())

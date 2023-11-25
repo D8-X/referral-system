@@ -21,6 +21,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+func init() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+	})))
+}
+
 //go:embed ranky.txt
 var embedFS embed.FS
 var abc []byte
@@ -63,8 +69,9 @@ func Run() {
 	}
 	nxt := utils.NextPaymentSchedule(app.Settings.PayCronSchedule)
 	slog.Info("Next payment due on " + nxt.Format("2006-January-02 15:04:05"))
+	// confirming payment transactions, if any
+	app.ConfirmPaymentTxs()
 	app.SavePayments()
-	app.PurgeUnconfirmedPayments()
 	err = app.DbGetMarginTkn()
 	if err != nil {
 		slog.Error("Error:" + err.Error())

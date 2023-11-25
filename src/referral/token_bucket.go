@@ -1,6 +1,8 @@
 package referral
 
 import (
+	"log/slog"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -29,6 +31,17 @@ func (tb *TokenBucket) refill() {
 	if tokensToAdd > 0 {
 		tb.tokens = min(tb.capacity, tb.tokens+tokensToAdd)
 		tb.lastRefill = now
+	}
+}
+
+func (tb *TokenBucket) WaitForToken(topic string) {
+	for {
+		if tb.Take() {
+			slog.Info(topic + ": rpc token obtained")
+			return
+		}
+		slog.Info(topic + ": too many RPC requests, slowing down ")
+		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	}
 }
 

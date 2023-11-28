@@ -251,7 +251,7 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	payees[0] = common.HexToAddress(row.TraderAddr)
 	amounts[0] = utils.DecNTimesFloat(totalDecN, chain[len(chain)-1].ChildAvail, precision)
 	distributed := new(big.Int).Set(amounts[0])
-	for k := 1; k < len(chain); k++ {
+	for k := 0; k < len(chain); k++ {
 		el := chain[k]
 		amount := utils.DecNTimesFloat(totalDecN, el.ParentPay, precision)
 		amounts[k+1] = amount
@@ -260,10 +260,6 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	}
 	// parent amount goes to broker payout address
 	payees[1] = a.Settings.BrokerPayoutAddr
-	// amount for parent is set to remainder so that we ensure
-	// totalDecN = sum of distributed amounts
-	amounts[1] = new(big.Int).Set(totalDecN)
-	amounts[1].Sub(amounts[1], distributed)
 
 	// encode message: batchTs.<code>.<poolId>.<encodingversion>
 	msg := encodePaymentInfo(batchTs, row.Code, int(row.PoolId))

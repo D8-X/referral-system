@@ -167,7 +167,7 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 	slog.Info("Got signature for payment execution:" + sig)
 	// check signature address
 	sigTrim := strings.TrimPrefix(sig, "0x")
-	signer, err := d8x_futures.RecoverPaymentSignatureAddr(common.Hex2Bytes(sigTrim[:]), payment)
+	signer, err := d8x_futures.RecoverPaymentSignatureAddr(common.Hex2Bytes(sigTrim[:]), &payment)
 	if err != nil {
 		return "", errors.New("Could not recover signature " + err.Error())
 	}
@@ -189,13 +189,12 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 // retrieves the remote-broker signature via REST API. Returns the signature
 // as hex-string
 func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (string, error) {
-	var execWallet d8x_futures.Wallet
 	pk := fmt.Sprintf("%x", exc.ExecPrivKey.D)
-	err := execWallet.NewWallet(pk, paydata.ChainId, nil)
+	execWallet, err := d8x_futures.NewWallet(pk, paydata.ChainId, nil)
 	if err != nil {
 		return "", errors.New("error creating wallet:" + err.Error())
 	}
-	_, sg, err := d8x_futures.CreatePaymentBrokerSignature(paydata, execWallet)
+	_, sg, err := d8x_futures.RawCreatePaymentBrokerSignature(&paydata, execWallet)
 	slog.Info("Querying broker signature...")
 	slog.Info("Token    = " + paydata.Token.String())
 	slog.Info("Broker   = " + paydata.Payer.String())

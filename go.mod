@@ -3,7 +3,7 @@ module referral-system
 go 1.21
 
 require (
-	github.com/D8-X/d8x-futures-go-sdk v0.2.10
+	github.com/D8-X/d8x-futures-go-sdk v0.3.10
 	github.com/adhocore/gronx v1.6.6
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/go-chi/chi/v5 v5.0.10
@@ -25,6 +25,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
+	github.com/forta-network/go-multicall v0.0.0-20230701154355-9467c4ddaa83 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/uuid v1.5.0 // indirect

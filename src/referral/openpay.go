@@ -267,7 +267,7 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	id := row.LastTradeConsidered.Unix()
 	a.PaymentExecutor.SetClient(a.RpcClient)
 
-	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg)
+	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg, a.RpcClient)
 	if err != nil {
 		slog.Error(err.Error())
 		if strings.Contains(err.Error(), "insufficient funds") {

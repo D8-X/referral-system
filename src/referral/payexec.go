@@ -34,7 +34,7 @@ type PayExec interface {
 	// assign private key and remote broker address
 	Init(viper *viper.Viper, multiPayAddr string) error
 	GetBrokerAddr() common.Address
-	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error)
+	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string, rpc *ethclient.Client) (string, error)
 	GetExecutorAddrHex() string
 	SetClient(client *ethclient.Client)
 	NewTokenBucket(tokens int, refillRate float64)
@@ -141,7 +141,7 @@ func (exc *RemotePayExec) GetExecutorAddrHex() string {
 	return execAddr
 }
 
-func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string) (string, error) {
+func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string, rpc *ethclient.Client) (string, error) {
 	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
 	if len(amounts) != len(payees) {
 		return "", errors.New("#amounts must be equal to #payees")
@@ -160,7 +160,7 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 		MultiPayCtrct: common.HexToAddress(exc.MultipayCtrctAddr),
 	}
 
-	sig, err := exc.remoteGetSignature(payment)
+	sig, err := exc.remoteGetSignature(payment, rpc)
 	if err != nil {
 		return "", err
 	}
@@ -188,9 +188,10 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 // remoteGetSignature signs the payment data locally with the executor address and
 // retrieves the remote-broker signature via REST API. Returns the signature
 // as hex-string
-func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary) (string, error) {
+func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary, rpc *ethclient.Client) (string, error) {
 	pk := fmt.Sprintf("%x", exc.ExecPrivKey.D)
-	execWallet, err := d8x_futures.NewWallet(pk, paydata.ChainId, nil)
+
+	execWallet, err := d8x_futures.NewWallet(pk, paydata.ChainId, rpc)
 	if err != nil {
 		return "", errors.New("error creating wallet:" + err.Error())
 	}

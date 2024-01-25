@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"math/big"
 	"strconv"
 	"testing"
 	"time"
@@ -26,4 +27,17 @@ func TestPaymentSchedule(t *testing.T) {
 	if !(currentTime.After(prevTime) && nxtTime.After(currentTime)) {
 		t.Errorf("unexpected order")
 	}
+}
+
+func TestAbdkQuo(t *testing.T) {
+	strNumber := "226894952106627484" // Replace with your string number
+	myBigInt := new(big.Int)
+
+	// SetString parses the string and sets the value of the big.Int
+	myBigInt.SetString(strNumber, 10)
+	// want 12299999999999999
+	v2 := ABDKToDecN(myBigInt, 18)
+	fmt.Println(v2.String())
+	am := DecNTimesFloat(v2, 0.9999, 18)
+	fmt.Println(am.String())
 }

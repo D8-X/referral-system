@@ -244,7 +244,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) error {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
 	// scale down to mitigate rounding issues
-	totalDecN = utils.DecNTimesFloat(totalDecN, 0.9999, 18)
+	// totalDecN = utils.DecNTimesFloat(totalDecN, 0.9999, 18)
 	payees := make([]common.Address, len(chain)+1)
 	amounts := make([]*big.Int, len(chain)+1)
 	// order: trader, broker, [agent1, agent2, ...], referrer

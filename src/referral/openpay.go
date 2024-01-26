@@ -262,14 +262,17 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	}
 	// parent amount goes to broker payout address
 	payees[1] = a.Settings.BrokerPayoutAddr
-
+	// rounding down typically leads to totalDecN<distributed
+	if distributed.Cmp(totalDecN) < 0 {
+		totalDecN = distributed
+	}
 	// encode message: batchTs.<code>.<poolId>.<encodingversion>
 	msg := encodePaymentInfo(batchTs, row.Code, int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
 	a.PaymentExecutor.SetClient(a.RpcClient)
 
-	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg, a.RpcClient)
+	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg, row.Code, a.RpcClient)
 	if err != nil {
 		slog.Error(err.Error())
 		if strings.Contains(err.Error(), "insufficient funds") {

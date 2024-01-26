@@ -162,6 +162,8 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	return logs, nil
 }
 
+// processMultiPayEvents loops through blockchain events from the multipay contract and collects the data in
+// the logs slice
 func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *contracts.MultiPayPaymentIterator, logs *[]PaymentLog) {
 	blockTimestamps := make(map[uint64]uint64)
 	countDefaultCode := 0

@@ -34,7 +34,7 @@ type PayExec interface {
 	// assign private key and remote broker address
 	Init(viper *viper.Viper, multiPayAddr string) error
 	GetBrokerAddr() common.Address
-	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string, rpc *ethclient.Client) (string, error)
+	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg, code string, rpc *ethclient.Client) (string, error)
 	GetExecutorAddrHex() string
 	SetClient(client *ethclient.Client)
 	NewTokenBucket(tokens int, refillRate float64)
@@ -128,8 +128,8 @@ func (exc *RemotePayExec) Init(viper *viper.Viper, multiPayAddr string) error {
 	return nil
 }
 
-func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg string) {
-	slog.Info("transact " + msg + ", last trade " + strconv.FormatInt(id, 10))
+func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []common.Address, id int64, msg, code string) {
+	slog.Info("transact " + code + ";" + msg + ", last trade " + strconv.FormatInt(id, 10))
 	for k := 0; k < len(payees); k++ {
 		slog.Info(" -- Payee " + payees[k].String())
 		slog.Info("    Amount (decN)" + amounts[k].String())
@@ -141,8 +141,8 @@ func (exc *RemotePayExec) GetExecutorAddrHex() string {
 	return execAddr
 }
 
-func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg string, rpc *ethclient.Client) (string, error) {
-	logPaymentIntent(tokenAddr, amounts, payees, id, msg)
+func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg, code string, rpc *ethclient.Client) (string, error) {
+	logPaymentIntent(tokenAddr, amounts, payees, id, msg, code)
 	if len(amounts) != len(payees) {
 		return "", errors.New("#amounts must be equal to #payees")
 	}

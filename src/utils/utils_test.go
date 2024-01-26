@@ -41,3 +41,10 @@ func TestAbdkQuo(t *testing.T) {
 	am := DecNTimesFloat(v2, 0.9999, 18)
 	fmt.Println(am.String())
 }
+
+func TestRatio(t *testing.T) {
+	x, _ := new(big.Int).SetString("12345678901234567890", 10)
+	y, _ := new(big.Int).SetString("9876543210987654321", 10)
+	r := Ratio(x, y)
+	fmt.Println(r) //~1.25
+}

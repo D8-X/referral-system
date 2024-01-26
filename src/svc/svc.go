@@ -59,6 +59,7 @@ func Run() {
 	}
 
 	err = app.New(v)
+
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return

@@ -48,6 +48,15 @@ func ABDKToFloat(num *big.Int) float64 {
 	return f
 }
 
+// Ratio calculates the ratio of two big int that are "similar" as float
+func Ratio(x *big.Int, y *big.Int) float64 {
+	xFloat := new(big.Float).SetInt(x)
+	yFloat := new(big.Float).SetInt(y)
+	resultFloat := new(big.Float).Quo(xFloat, yFloat)
+	result, _ := resultFloat.Float64()
+	return result
+}
+
 // DecNTimesFloat multiplies a decimal-N number
 // with a fraction m>0 in decimal system. One application
 // is to get a relative share (e.g., 1%) of the

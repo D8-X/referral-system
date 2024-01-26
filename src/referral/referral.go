@@ -411,7 +411,7 @@ func (a *App) SavePayments() error {
 	if err != nil {
 		lookBackBlock = 0
 	}
-	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient, lookBackBlock)
+	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient, lookBackBlock, 0)
 	if err != nil {
 		return err
 	}
@@ -643,7 +643,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		}
 	} else if err != nil {
 		return err
-	} else if isConfirmed == false {
+	} else if !isConfirmed {
 		// set tx confirmed to true
 		query = `UPDATE referral_payment 
 				SET tx_confirmed = true, block_nr = $4, block_ts = $5

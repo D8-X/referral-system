@@ -116,30 +116,56 @@ func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) 
 }
 
 // FilterPayments collects historical events and updates the database
-func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock uint64) ([]PaymentLog, error) {
-	// Create an event iterator for the MultiPayPayment events
-	opts := &bind.FilterOpts{
-		Start:   startBlock, // Starting block number
-		End:     nil,        // Ending block (nil for latest)
-		Context: context.Background(),
-	}
-	multiPayPaymentIterator, err := ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
+func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock, endBlock uint64) ([]PaymentLog, error) {
+	header, err := client.HeaderByNumber(context.Background(), nil)
 	if err != nil {
-		return []PaymentLog{}, errors.New("Failed to create event iterator: " + err.Error())
+		return []PaymentLog{}, errors.New("Failed to get block hgeader: " + err.Error())
 	}
-	// Iterate through the events and gather paymentlog:
-	/*
-		PaymentLog
-			BatchTimestamp string
-			Code           string
-			PoolId         uint32
-			TokenAddr      string
-			BrokerAddr     string
-			PayeeAddr      []string
-			AmountDecN     []string
-	*/
-	blockTimestamps := make(map[uint64]uint64)
+	nowBlock := header.Number.Uint64()
+
+	// filter payments in batches of 5000 blocks to avoid RPC limit
 	var logs []PaymentLog
+	for {
+		endBlock := startBlock + 5000
+		// Create an event iterator for the MultiPayPayment events
+		var endBlockPtr *uint64 = &endBlock
+		if endBlock >= nowBlock {
+			endBlockPtr = nil
+		}
+		opts := &bind.FilterOpts{
+			Start:   startBlock,  // Starting block number
+			End:     endBlockPtr, // Ending block (nil for latest)
+			Context: context.Background(),
+		}
+		multiPayPaymentIterator, err := ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
+		if err != nil {
+			return logs, errors.New("Failed to create event iterator: " + err.Error())
+		}
+		// Iterate through the events and gather paymentlog:
+		/*
+			PaymentLog
+				BatchTimestamp string
+				Code           string
+				PoolId         uint32
+				TokenAddr      string
+				BrokerAddr     string
+				PayeeAddr      []string
+				AmountDecN     []string
+		*/
+
+		processMultiPayEvents(client, multiPayPaymentIterator, &logs)
+		if endBlock >= nowBlock {
+			break
+		}
+		startBlock = endBlock + 1
+	}
+	return logs, nil
+}
+
+// processMultiPayEvents loops through blockchain events from the multipay contract and collects the data in
+// the logs slice
+func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *contracts.MultiPayPaymentIterator, logs *[]PaymentLog) {
+	blockTimestamps := make(map[uint64]uint64)
 	countDefaultCode := 0
 	for {
 		if !multiPayPaymentIterator.Next() {
@@ -154,6 +180,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 			slog.Info("- event message not in expected format")
 			continue
 		}
+		var err error
 		pay.BatchTimestamp, err = strconv.Atoi(s[0])
 		if err != nil {
 			slog.Info("- event message batch timestamp not in expected format")
@@ -184,11 +211,13 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		} else {
 			slog.Info("Event Data for code " + pay.Code)
 		}
-		logs = append(logs, pay)
+		*logs = append(*logs, pay)
 	}
-	slog.Info("Event Data for code DEFAULT (" + strconv.Itoa(countDefaultCode) + " times)")
+	if countDefaultCode > 0 {
+		slog.Info("Event Data for code DEFAULT (" + strconv.Itoa(countDefaultCode) + " times)")
+	}
 	// find unassigend block timestamps
-	for _, pay := range logs {
+	for _, pay := range *logs {
 		if pay.BlockTs == 0 {
 			ts := getBlockTimestamp(pay.BlockNumber, client)
 			if ts != 0 {
@@ -201,7 +230,6 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 			}
 		}
 	}
-	return logs, nil
 }
 
 // get the block timestamp for a block with a given number

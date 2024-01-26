@@ -148,6 +148,56 @@ func (a *App) dbGetPayBatch() (bool, int64) {
 	return hasFinishedStr == "true", int64(time)
 }
 
+// determineScalingFactor sums all broker fees for the current broker
+// per pool token and divides the token holdings of the broker by it, s.t.
+// distributable_amount * scale = available amount
+// This is needed if the balance is lower than the fees earned (e.g. due to
+// an error with collecting historical payments or the broker moving out funds)
+func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
+
+	query := `SELECT agfpt.pool_id, 
+					sum(agfpt.broker_fee_cc) as broker_fee_cc,
+					mti.token_addr
+				FROM referral_aggr_fees_per_trader agfpt
+				JOIN margin_token_info mti
+				ON mti.pool_id = agfpt.pool_id
+				join referral_settings rs
+				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
+				and rs.property='broker_addr'
+				group by agfpt.pool_id, mti.token_addr`
+	rows, err := a.Db.Query(query)
+	defer rows.Close()
+	if err != nil {
+		return nil, errors.New("determineScalingFactor:" + err.Error())
+	}
+	scale := make(map[uint32]float64)
+	for rows.Next() {
+		var pool uint32
+		var broker_fee_ccStr string
+		var tokenAddr string
+		rows.Scan(&pool, &broker_fee_ccStr, &tokenAddr)
+		tkn, err := a.CreateErc20Instance(tokenAddr)
+		if err != nil {
+			slog.Error("determineScalingFactor: could not create token instance")
+			scale[pool] = 1
+			continue
+		}
+		holdings, err := a.QueryTokenBalance(tkn, a.BrokerAddr)
+		if err != nil {
+			slog.Error("determineScalingFactor: could not query token balance")
+			scale[pool] = 1
+			continue
+		}
+		broker_fee_cc, _ := new(big.Int).SetString(broker_fee_ccStr, 10)
+		var ratio float64 = 1
+		if broker_fee_cc.Cmp(holdings) == 1 {
+			ratio = utils.Ratio(holdings, broker_fee_cc)
+		}
+		scale[pool] = ratio
+	}
+	return scale, nil
+}
+
 // ProcessAllPayments determins how much to pay and ultimately delegates
 // payment execution to payexec
 func (a *App) ProcessAllPayments(filterPayments bool) error {
@@ -197,6 +247,13 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 		slog.Error("Error for process pay" + err.Error())
 		return err
 	}
+	// in case we have less balance than fee earnings,
+	// fee redistribution must be scaled
+	scale, err := a.DetermineScalingFactor()
+	if err != nil {
+		slog.Error("Error for process pay" + err.Error())
+		return err
+	}
 	var aggrFeesPerTrader []AggregatedFeesRow
 	codePaths := make(map[string][]DbReferralChainOfChild)
 	for rows.Next() {
@@ -219,7 +276,8 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 			codePaths[el.Code] = chain
 		}
 		// process
-		err = a.processPayment(el, codePaths[el.Code], batchTs)
+		scalingFactor := scale[el.PoolId]
+		err = a.processPayment(el, codePaths[el.Code], batchTs, scalingFactor)
 		if err != nil {
 			slog.Info("aborting payments...")
 			break
@@ -241,10 +299,15 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	return nil
 }
 
-func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string) error {
+func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string, scaling float64) error {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
-	// scale down to mitigate rounding issues
-	// totalDecN = utils.DecNTimesFloat(totalDecN, 0.9999, 18)
+	// scale
+	if scaling < 1 {
+		totalDecN = utils.DecNTimesFloat(totalDecN, scaling, 18)
+		msg := fmt.Sprintf("Scaling payment amount by %.2f", scaling)
+		slog.Info(msg)
+	}
+
 	payees := make([]common.Address, len(chain)+1)
 	amounts := make([]*big.Int, len(chain)+1)
 	// order: trader, broker, [agent1, agent2, ...], referrer
@@ -262,14 +325,17 @@ func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChi
 	}
 	// parent amount goes to broker payout address
 	payees[1] = a.Settings.BrokerPayoutAddr
-
+	// rounding down typically leads to totalDecN<distributed
+	if distributed.Cmp(totalDecN) < 0 {
+		totalDecN = distributed
+	}
 	// encode message: batchTs.<code>.<poolId>.<encodingversion>
 	msg := encodePaymentInfo(batchTs, row.Code, int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
 	a.PaymentExecutor.SetClient(a.RpcClient)
 
-	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg, a.RpcClient)
+	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg, row.Code, a.RpcClient)
 	if err != nil {
 		slog.Error(err.Error())
 		if strings.Contains(err.Error(), "insufficient funds") {

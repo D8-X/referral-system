@@ -213,7 +213,9 @@ func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *co
 		}
 		*logs = append(*logs, pay)
 	}
-	slog.Info("Event Data for code DEFAULT (" + strconv.Itoa(countDefaultCode) + " times)")
+	if countDefaultCode > 0 {
+		slog.Info("Event Data for code DEFAULT (" + strconv.Itoa(countDefaultCode) + " times)")
+	}
 	// find unassigend block timestamps
 	for _, pay := range *logs {
 		if pay.BlockTs == 0 {

@@ -157,14 +157,14 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 
 	query := `SELECT agfpt.pool_id, 
 					sum(agfpt.broker_fee_cc) as broker_fee_cc,
-					mti.token_addr
+					mti.token_addr, mti.token_decimals
 				FROM referral_aggr_fees_per_trader agfpt
 				JOIN margin_token_info mti
 				ON mti.pool_id = agfpt.pool_id
 				join referral_settings rs
 				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
 				and rs.property='broker_addr'
-				group by agfpt.pool_id, mti.token_addr`
+				group by agfpt.pool_id, mti.token_addr, mti.token_decimals`
 	rows, err := a.Db.Query(query)
 	defer rows.Close()
 	if err != nil {
@@ -175,23 +175,26 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 		var pool uint32
 		var broker_fee_ccStr string
 		var tokenAddr string
-		rows.Scan(&pool, &broker_fee_ccStr, &tokenAddr)
+		var decimals uint8
+		rows.Scan(&pool, &broker_fee_ccStr, &tokenAddr, &decimals)
 		tkn, err := a.CreateErc20Instance(tokenAddr)
 		if err != nil {
 			slog.Error("determineScalingFactor: could not create token instance")
 			scale[pool] = 1
 			continue
 		}
-		holdings, err := a.QueryTokenBalance(tkn, a.BrokerAddr)
+		holdingsDecN, err := a.QueryTokenBalance(tkn, a.BrokerAddr)
 		if err != nil {
 			slog.Error("determineScalingFactor: could not query token balance")
 			scale[pool] = 1
 			continue
 		}
+
 		broker_fee_cc, _ := new(big.Int).SetString(broker_fee_ccStr, 10)
+		feeDecN := utils.ABDKToDecN(broker_fee_cc, decimals)
 		var ratio float64 = 1
-		if broker_fee_cc.Cmp(holdings) == 1 {
-			ratio = utils.Ratio(holdings, broker_fee_cc)
+		if feeDecN.Cmp(holdingsDecN) == 1 {
+			ratio = utils.Ratio(holdingsDecN, feeDecN)
 		}
 		scale[pool] = ratio
 	}

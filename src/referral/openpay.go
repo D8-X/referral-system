@@ -195,6 +195,7 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 		var ratio float64 = 1
 		if feeDecN.Cmp(holdingsDecN) == 1 {
 			ratio = utils.Ratio(holdingsDecN, feeDecN)
+			fmt.Printf("Adjusted payout ratio for pool %d to %.4f\n", pool, ratio)
 		}
 		scale[pool] = ratio
 	}

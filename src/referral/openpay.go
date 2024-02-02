@@ -192,9 +192,11 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 
 		broker_fee_cc, _ := new(big.Int).SetString(broker_fee_ccStr, 10)
 		feeDecN := utils.ABDKToDecN(broker_fee_cc, decimals)
+		fmt.Printf("Token holding for pool %d of broker (dec %d): %s; tot fee=%s\n", pool, decimals, holdingsDecN.String(), feeDecN.String())
 		var ratio float64 = 1
 		if feeDecN.Cmp(holdingsDecN) == 1 {
 			ratio = utils.Ratio(holdingsDecN, feeDecN)
+			fmt.Printf("Adjusted payout ratio for pool %d to %.4f\n", pool, ratio)
 		}
 		scale[pool] = ratio
 	}

@@ -102,7 +102,7 @@ func loadEnv() (*viper.Viper, error) {
 	v.AutomaticEnv()
 
 	v.SetDefault(env.DATABASE_DSN_HISTORY, "postgres://postgres:postgres@localhost:5432/referral")
-
+	v.SetDefault(env.REFERRAL_SYS_TYPE, "CODE_REFERRAL")
 	requiredEnvs := []string{
 		env.DATABASE_DSN_HISTORY,
 		env.CONFIG_PATH,

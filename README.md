@@ -30,7 +30,32 @@ Payments are performed automatically as scheduled by the whitelabelling partner.
 - A **referrer** is an address that created a code. A code can be created by anyone. If the code was created by an agency, the rebate depends on the entire chain of agencies and the code's specific pass-on percentage. If the code was created by an address that is not an agency, the trader rebate and referrer cut depends on the referrer's token holdings as specified in the broker backend settings.
   
 </details>
-  
+
+# Overview
+
+*Common*
+* /earnings
+* /next-pay
+* /open-pay <- not fixed for social system
+* /executor
+* /my-referrals
+  * code: show codes and partners
+  * social: show number of addresses for which we are in top 3 social accounts
+
+*Code Referral System Only*
+* /my-code-selection
+* /code-rebate
+* /refer-cut
+* /select-code
+* /refer
+* /upsert-code
+* /token-info  
+
+*Social Referral System Only*
+* /global-ranking
+* /my-trader-rebate
+* /adduser (add user address and Twitter id)
+
 ## Get request: get all directly referred 'partners'
 Who are my partners/codes that I assigned as an agency/referrer
 and how much from my percentage cut do I pass on?

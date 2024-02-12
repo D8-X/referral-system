@@ -292,35 +292,6 @@ func onEarnings(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	w.Write(jsonResponse)
 }
 
-func onFoodChain(w http.ResponseWriter, r *http.Request, app *referral.App) {
-
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		errMsg := "Incorrect 'code' parameter"
-		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
-		return
-	}
-
-	res, err := app.DbGetReferralChainForCode(code)
-	if err != nil {
-		errMsg := err.Error()
-		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
-		return
-	}
-	// Marshal the struct into JSON
-	jsonResponse, err := json.Marshal(res)
-	if err != nil {
-		slog.Error("onFoodChain unable to marshal response" + err.Error())
-		errMsg := "Unavailable"
-		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
-		return
-	}
-	// Set the Content-Type header to application/json
-	w.Header().Set("Content-Type", "application/json")
-	// Write the JSON response
-	w.Write(jsonResponse)
-}
-
 func onOpenPay(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	addr := r.URL.Query().Get("traderAddr")
 	if addr == "" || !isValidEvmAddr(addr) {
@@ -329,7 +300,7 @@ func onOpenPay(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		return
 	}
 	addr = strings.ToLower(addr)
-	res, err := app.OpenPay(addr)
+	res, err := app.RS.OpenPay(app, addr)
 	if err != nil {
 		errMsg := err.Error()
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)

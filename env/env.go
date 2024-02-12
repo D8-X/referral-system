@@ -12,7 +12,7 @@ const (
 	API_PORT             = "API_PORT"
 	API_BIND_ADDR        = "API_BIND_ADDR"
 	KEYFILE_PATH         = "KEYFILE_PATH"
-
+	REFERRAL_SYS_TYPE    = "REFERRAL_SYS_TYPE"
 	// other constants
 	DEFAULT_CODE               = "DEFAULT"
 	REFERRER_TOKENX_BAL_FREQ_H = 24 * 5

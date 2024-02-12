@@ -29,6 +29,18 @@ type App struct {
 	RpcClient       *ethclient.Client
 	MultipayCtrct   *contracts.MultiPay
 	BrokerAddr      string
+	RS              ReferralSystem
+}
+
+type ReferralSystem interface {
+	ProcessPayments(app *App, rows *sql.Rows, scale map[uint32]float64, batchTs string)
+	OpenPay(app *App, traderAddr string) (utils.APIResponseOpenEarnings, error)
+}
+
+type CodeSystem struct {
+}
+
+type SocialSystem struct {
 }
 
 type Settings struct {
@@ -155,6 +167,15 @@ func (a *App) New(viper *viper.Viper) error {
 	err = a.CreateMultipayInstance()
 	if err != nil {
 		return err
+	}
+
+	r := viper.GetString(env.REFERRAL_SYS_TYPE)
+	if r == "CODE_REFERRAL" {
+		slog.Info("Code referral system")
+		a.RS = CodeSystem{}
+	} else {
+		slog.Info("Social referral system")
+		a.RS = SocialSystem{}
 	}
 	return nil
 }

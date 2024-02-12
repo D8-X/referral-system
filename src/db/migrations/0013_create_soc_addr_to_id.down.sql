@@ -1,0 +1,1 @@
+drop table if exists soc_addr_to_id;

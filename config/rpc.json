@@ -13,5 +13,13 @@
   {
     "chainId": 1101,
     "HTTP": ["https://zkevm-rpc.com"]
+  },
+  {
+    "chainId": 2442,
+    "HTTP": ["https://rpc.cardona.zkevm-rpc.com"]
+  },
+  {
+    "chainId": 421614,
+    "HTTP": ["https://sepolia-rollup.arbitrum.io/rpc"]
   }
 ]

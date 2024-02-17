@@ -454,3 +454,41 @@ func onExecutor(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	}
 	w.Write(jsonResponse)
 }
+
+func onSocialVerify(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	type VerifyRequest struct {
+		AppPubKey string `json:"appPubKey"`
+	}
+	// Extract jsonIdToken from the request header
+	jsonIdToken := r.Header.Get("Authorization")
+	if jsonIdToken == "" {
+		http.Error(w, "Authorization token not provided", http.StatusUnauthorized)
+		return
+	}
+	jsonIdToken = strings.TrimPrefix(jsonIdToken, "Bearer ")
+
+	var token APISocialIdToken
+	err := json.Unmarshal([]byte(jsonIdToken), &token)
+	if err != nil {
+		errMsg := `Wrong argument types. Usage: web3auth server-side-verification`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	// Read the JSON data from the request body
+	var verifyRequest VerifyRequest
+	defer r.Body.Close()
+	jsonData, _ := io.ReadAll(r.Body)
+	err = json.Unmarshal(jsonData, &verifyRequest)
+	if err != nil {
+		errMsg := `Wrong argument types. Usage: web3auth server-side-verification`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	err = VerifyJWT(&token, verifyRequest.AppPubKey)
+	if err != nil {
+		slog.Error("Authentication failed:" + err.Error())
+		http.Error(w, string(formatError("Authentication failed")), http.StatusBadRequest)
+		return
+	}
+	w.Write([]byte("success"))
+}

@@ -65,4 +65,10 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 		onExecutor(w, r, app)
 	})
 
+	// ***-- social referral system ---***
+	// Endpoint: /social-verify, POST
+	router.Post("/social-verify", func(w http.ResponseWriter, r *http.Request) {
+		onSocialVerify(w, r, app)
+	})
+
 }

@@ -20,6 +20,6 @@
   },
   {
     "chainId": 421614,
-    "HTTP": ["https://sepolia-rollup.arbitrum.io/rpc"]
+    "HTTP": ["https://arbitrum-sepolia.blockpi.network/v1/rpc/public", "https://sepolia-rollup.arbitrum.io/rpc"]
   }
 ]

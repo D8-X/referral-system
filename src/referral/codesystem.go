@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type CodeSystem struct{}
+
 func (rs CodeSystem) OpenPay(app *App, traderAddr string) (utils.APIResponseOpenEarnings, error) {
 	type AggrFees struct {
 		PoolId              uint32
@@ -145,7 +147,7 @@ func (rs CodeSystem) processCodePaymentRow(app *App, row AggregatedFeesRow, chai
 		totalDecN = distributed
 	}
 	// encode message: batchTs.<code>.<poolId>.<encodingversion>
-	msg := encodePaymentInfo(batchTs, row.Code, int(row.PoolId))
+	msg := EncodePaymentInfo(batchTs, row.Code, int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
 	app.PaymentExecutor.SetClient(app.RpcClient)
@@ -159,7 +161,7 @@ func (rs CodeSystem) processCodePaymentRow(app *App, row AggregatedFeesRow, chai
 			return nil
 		}
 	}
-	app.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash)
+	app.DbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash)
 	return nil
 }
 

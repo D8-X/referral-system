@@ -10,11 +10,13 @@ import (
 	"os"
 	"referral-system/env"
 	"referral-system/src/contracts"
+
 	"referral-system/src/utils"
 	"strconv"
 	"strings"
 	"time"
 
+	tc "github.com/D8-X/twitter-counter/src/twitter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/viper"
@@ -30,17 +32,16 @@ type App struct {
 	MultipayCtrct   *contracts.MultiPay
 	BrokerAddr      string
 	RS              ReferralSystem
+	Xsdk            *XSdk
 }
 
+type XSdk struct {
+	Client   tc.Client
+	Analyzer *tc.Analyzer
+}
 type ReferralSystem interface {
 	ProcessPayments(app *App, rows *sql.Rows, scale map[uint32]float64, batchTs string)
 	OpenPay(app *App, traderAddr string) (utils.APIResponseOpenEarnings, error)
-}
-
-type CodeSystem struct {
-}
-
-type SocialSystem struct {
 }
 
 type Settings struct {
@@ -176,6 +177,16 @@ func (a *App) New(viper *viper.Viper) error {
 	} else {
 		slog.Info("Social referral system")
 		a.RS = SocialSystem{}
+		// connect X
+		var sdk XSdk
+		tbearer := viper.GetString("TWITTER_AUTH_BEARER")
+		if tbearer == "" {
+			return errors.New("TWITTER_AUTH_BEARER not defined")
+		}
+		sdk.Client = tc.NewAuthBearerClient(tbearer)
+		sdk.Analyzer = tc.NewProductionAnalyzer(sdk.Client)
+		a.Xsdk = &sdk
+
 	}
 	return nil
 }
@@ -618,8 +629,8 @@ func (a *App) IsAgency(addr string) bool {
 	return err != sql.ErrNoRows
 }
 
-// dbWriteTx write info about the payment transaction into referral_payment
-func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, payees []common.Address, batchTs string, poolId uint32, tx string) {
+// DbWriteTx write info about the payment transaction into referral_payment
+func (a *App) DbWriteTx(traderAddr string, code string, amounts []*big.Int, payees []common.Address, batchTs string, poolId uint32, tx string) {
 	slog.Info("Inserting Payment TX in DB")
 	t, _ := strconv.Atoi(batchTs)
 	ts := time.Unix(int64(t), 0)

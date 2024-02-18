@@ -97,7 +97,7 @@ func deObstructMsg(msg string) string {
 	return s[0] + "." + code + "." + s[2] + "." + s[3]
 }
 
-func encodePaymentInfo(batchTs string, code string, poolId int) string {
+func EncodePaymentInfo(batchTs string, code string, poolId int) string {
 	msg := batchTs + "." + code + "." + strconv.Itoa(poolId) + "." + strconv.Itoa(ENCODING_VERSION)
 	return obstructMsg(msg)
 }

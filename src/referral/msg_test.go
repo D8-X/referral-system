@@ -33,7 +33,7 @@ func TestEncodePaymentInfo(t *testing.T) {
 	batchTs := "1699702424"
 	code := "HELLO-123_"
 	poolId := 1
-	encoded := encodePaymentInfo(batchTs, code, poolId)
+	encoded := EncodePaymentInfo(batchTs, code, poolId)
 	fmt.Println("encoded msg = ", encoded)
 	decoded := decodePaymentInfo(encoded)
 	fmt.Println("decoded msg = ", encoded)

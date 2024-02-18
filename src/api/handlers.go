@@ -456,6 +456,11 @@ func onExecutor(w http.ResponseWriter, r *http.Request, app *referral.App) {
 }
 
 func onSocialVerify(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	if app.Xsdk == nil {
+		errMsg := `Social referral system not setup`
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
 	type VerifyRequest struct {
 		AppPubKey string `json:"appPubKey"`
 	}
@@ -466,25 +471,17 @@ func onSocialVerify(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		return
 	}
 	jsonIdToken = strings.TrimPrefix(jsonIdToken, "Bearer ")
-
-	var token APISocialIdToken
-	err := json.Unmarshal([]byte(jsonIdToken), &token)
-	if err != nil {
-		errMsg := `Wrong argument types. Usage: web3auth server-side-verification`
-		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
-		return
-	}
 	// Read the JSON data from the request body
 	var verifyRequest VerifyRequest
 	defer r.Body.Close()
 	jsonData, _ := io.ReadAll(r.Body)
-	err = json.Unmarshal(jsonData, &verifyRequest)
+	err := json.Unmarshal(jsonData, &verifyRequest)
 	if err != nil {
 		errMsg := `Wrong argument types. Usage: web3auth server-side-verification`
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
-	err = VerifyJWT(&token, verifyRequest.AppPubKey)
+	err = RegisterSocialUser(jsonIdToken, verifyRequest.AppPubKey, app)
 	if err != nil {
 		slog.Error("Authentication failed:" + err.Error())
 		http.Error(w, string(formatError("Authentication failed")), http.StatusBadRequest)

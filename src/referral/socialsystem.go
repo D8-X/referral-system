@@ -5,6 +5,9 @@ import (
 	"referral-system/src/utils"
 )
 
+type SocialSystem struct {
+}
+
 func (rs SocialSystem) OpenPay(app *App, traderAddr string) (utils.APIResponseOpenEarnings, error) {
 	return utils.APIResponseOpenEarnings{}, nil
 }

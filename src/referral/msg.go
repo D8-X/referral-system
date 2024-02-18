@@ -16,8 +16,7 @@ const ENCODING_VERSION = 1
 // shuffle letters deterministically
 func shuffleLetters() {
 	var padShuffled []rune
-	var pad []rune
-	pad = make([]rune, 38) // 26 letters + '_' + '-' + 0...9
+	pad := make([]rune, 38) // 26 letters + '_' + '-' + 0...9
 	for i := 0; i < 26; i++ {
 		pad[i] = rune('A' + i)
 	}

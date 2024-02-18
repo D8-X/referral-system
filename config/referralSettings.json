@@ -11,7 +11,12 @@
         [2.5, 1000],
         [3.75, 10000]
       ],
-    "brokerPayoutAddr": "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05"
+    "brokerPayoutAddr": "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
+    "social": {
+      "socialCutPerc": [20, 10, 5],
+      "anonTraderCutPerc": 2,
+      "knownTraderCutPerc": 2
+    }
   },
   {
     "chainId": 195,

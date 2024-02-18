@@ -23,8 +23,8 @@ type AggregatedFeesRow struct {
 
 func (a *App) SchedulePayment() {
 	// Define the timestamp when the task is due (replace with your timestamp)
-	dueTimestamp := utils.NextPaymentSchedule(a.Settings.PayCronSchedule)
-	durUntilDue := dueTimestamp.Sub(time.Now())
+	dueTimestamp := utils.NextPaymentSchedule(a.RS.GetCronSchedule())
+	durUntilDue := time.Until(dueTimestamp)
 
 	go func() {
 		slog.Info("Waiting for " + durUntilDue.String() + " until next payment is due...")
@@ -45,7 +45,7 @@ func (a *App) IsPaymentDue() bool {
 		return false
 	}
 	ts := time.Unix(batchTime, 0)
-	prevTime := utils.PrevPaymentSchedule(a.Settings.PayCronSchedule)
+	prevTime := utils.PrevPaymentSchedule(a.RS.GetCronSchedule())
 	slog.Info("Last payment due time: " + prevTime.Format("2006-01-02 15:04:05"))
 	slog.Info("Last payment batch execution time: " + ts.Format("2006-01-02 15:04:05"))
 
@@ -93,10 +93,10 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 				and rs.property='broker_addr'
 				group by agfpt.pool_id, mti.token_addr, mti.token_decimals`
 	rows, err := a.Db.Query(query)
-	defer rows.Close()
 	if err != nil {
 		return nil, errors.New("determineScalingFactor:" + err.Error())
 	}
+	defer rows.Close()
 	scale := make(map[uint32]float64)
 	for rows.Next() {
 		var pool uint32
@@ -104,13 +104,13 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 		var tokenAddr string
 		var decimals uint8
 		rows.Scan(&pool, &broker_fee_ccStr, &tokenAddr, &decimals)
-		tkn, err := a.CreateErc20Instance(tokenAddr)
+		tkn, err := CreateErc20Instance(tokenAddr, a.RpcClient)
 		if err != nil {
 			slog.Error("determineScalingFactor: could not create token instance")
 			scale[pool] = 1
 			continue
 		}
-		holdingsDecN, err := a.QueryTokenBalance(tkn, a.BrokerAddr)
+		holdingsDecN, err := QueryTokenBalance(tkn, a.RS.GetBrokerAddr())
 		if err != nil {
 			slog.Error("determineScalingFactor: could not query token balance")
 			scale[pool] = 1
@@ -159,7 +159,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	}
 
 	// update token holdings
-	err := a.DbUpdateTokenHoldings()
+	err := a.RS.PreProcessPayments(a.RpcClient)
 	if err != nil {
 		return errors.New("ProcessAllPayments: Failed to update token holdings " + err.Error())
 	}
@@ -174,11 +174,11 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
 				and rs.property='broker_addr'`
 	rows, err := a.Db.Query(query)
-	defer rows.Close()
 	if err != nil {
 		slog.Error("Error for process pay" + err.Error())
 		return err
 	}
+	defer rows.Close()
 	// in case we have less balance than fee earnings,
 	// fee redistribution must be scaled
 	scale, err := a.DetermineScalingFactor()

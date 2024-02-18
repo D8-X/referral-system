@@ -64,11 +64,11 @@ func Run() {
 		slog.Error("Error:" + err.Error())
 		return
 	}
-	if !utils.IsValidPaymentSchedule(app.Settings.PayCronSchedule) {
+	if !utils.IsValidPaymentSchedule(app.RS.GetCronSchedule()) {
 		slog.Error("Error: paymentScheduleCron not a valid CRON-expression")
 		return
 	}
-	nxt := utils.NextPaymentSchedule(app.Settings.PayCronSchedule)
+	nxt := utils.NextPaymentSchedule(app.RS.GetCronSchedule())
 	slog.Info("Next payment due on " + nxt.Format("2006-January-02 15:04:05"))
 	// confirming payment transactions, if any
 	app.ConfirmPaymentTxs()

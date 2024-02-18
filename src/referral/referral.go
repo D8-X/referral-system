@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	tc "github.com/D8-X/twitter-counter/src/twitter"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/viper"
@@ -26,35 +25,24 @@ type App struct {
 	Db              *sql.DB
 	MarginTokenInfo []DbMarginTokenInfo
 	PaymentExecutor PayExec
-	Settings        Settings
 	Rpc             []string
 	RpcClient       *ethclient.Client
 	MultipayCtrct   *contracts.MultiPay
-	BrokerAddr      string
 	RS              ReferralSystem
-	Xsdk            *XSdk
 }
 
-type XSdk struct {
-	Client   tc.Client
-	Analyzer *tc.Analyzer
-}
 type ReferralSystem interface {
 	ProcessPayments(app *App, rows *sql.Rows, scale map[uint32]float64, batchTs string)
 	OpenPay(app *App, traderAddr string) (utils.APIResponseOpenEarnings, error)
-}
-
-type Settings struct {
-	ChainId                int    `json:"chainId"`
-	PaymentMaxLookBackDays int    `json:"paymentMaxLookBackDays"`
-	PayCronSchedule        string `json:"paymentScheduleCron"`
-	MultiPayContractAddr   string `json:"multiPayContractAddr"`
-	TokenX                 struct {
-		Address  string `json:"address"`
-		Decimals uint8  `json:"decimals"`
-	} `json:"tokenX"`
-	ReferrerCut      [][]float64    `json:"referrerCutPercentForTokenXHolding"`
-	BrokerPayoutAddr common.Address `json:"brokerPayoutAddr"`
+	PreProcessPayments(rpc *ethclient.Client) error
+	LoadConfig(fileName string, chainId int) error
+	SetBrokerAddr(addr string)
+	GetBrokerAddr() string
+	GetCronSchedule() string
+	GetMultiPayAddr() string
+	GetPaymentLookBackDays() int
+	SetDb(db *sql.DB)
+	SettingsToDb() error
 }
 
 type Rpc struct {
@@ -124,14 +112,6 @@ type DbPayment struct {
 // New intantiates a referral app
 func (a *App) New(viper *viper.Viper) error {
 
-	// load settings
-	slog.Info("Loading configuration")
-	s, err := loadConfig(viper)
-	if err != nil {
-		return err
-	}
-	a.Settings = s
-
 	slog.Info("Loading RPC configuration")
 	rpcs, err := loadRPCConfig(viper)
 	if err != nil {
@@ -139,9 +119,27 @@ func (a *App) New(viper *viper.Viper) error {
 	}
 	a.Rpc = rpcs
 
-	a.PaymentExecutor = &RemotePayExec{}
-	slog.Info("Init PaymentExecutor")
-	err = a.PaymentExecutor.Init(viper, a.Settings.MultiPayContractAddr)
+	r := viper.GetString(env.REFERRAL_SYS_TYPE)
+	if r == "CODE_REFERRAL" {
+		slog.Info("Code referral system")
+		a.RS = &CodeSystem{}
+	} else {
+		slog.Info("Social referral system")
+		tbearer := viper.GetString("TWITTER_AUTH_BEARER")
+		a.RS = NewSocialSystem(tbearer)
+	}
+	// load config
+	slog.Info("Loading configuration")
+	fileName := viper.GetString(env.CONFIG_PATH)
+	targetChain := viper.GetInt(env.CHAIN_ID)
+	err = a.RS.LoadConfig(fileName, targetChain)
+	if err != nil {
+		return err
+	}
+
+	// connect db
+	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
+	err = a.ConnectDB(connStr)
 	if err != nil {
 		return err
 	}
@@ -149,12 +147,6 @@ func (a *App) New(viper *viper.Viper) error {
 	// settings to database
 	slog.Info("Writing settings to DB")
 	err = a.SettingsToDB()
-	if err != nil {
-		return err
-	}
-	// connect db
-	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
-	err = a.ConnectDB(connStr)
 	if err != nil {
 		return err
 	}
@@ -170,54 +162,14 @@ func (a *App) New(viper *viper.Viper) error {
 		return err
 	}
 
-	r := viper.GetString(env.REFERRAL_SYS_TYPE)
-	if r == "CODE_REFERRAL" {
-		slog.Info("Code referral system")
-		a.RS = CodeSystem{}
-	} else {
-		slog.Info("Social referral system")
-		a.RS = SocialSystem{}
-		// connect X
-		var sdk XSdk
-		tbearer := viper.GetString("TWITTER_AUTH_BEARER")
-		if tbearer == "" {
-			return errors.New("TWITTER_AUTH_BEARER not defined")
-		}
-		sdk.Client = tc.NewAuthBearerClient(tbearer)
-		sdk.Analyzer = tc.NewProductionAnalyzer(sdk.Client)
-		a.Xsdk = &sdk
-
+	a.PaymentExecutor = &RemotePayExec{}
+	slog.Info("Init PaymentExecutor")
+	err = a.PaymentExecutor.Init(viper, a.RS.GetMultiPayAddr())
+	if err != nil {
+		return err
 	}
+
 	return nil
-}
-
-// loadConfig loads the configuration file from the file system
-// and returns the Setting struct
-func loadConfig(v *viper.Viper) (Settings, error) {
-	fileName := v.GetString(env.CONFIG_PATH)
-	var settings []Settings
-	data, err := os.ReadFile(fileName)
-	if err != nil {
-		return Settings{}, err
-	}
-	err = json.Unmarshal(data, &settings)
-	if err != nil {
-		return Settings{}, err
-	}
-	// pick correct setting by chain id
-	var setting Settings = Settings{}
-	targetChain := v.GetInt(env.CHAIN_ID)
-	for k := 0; k < len(settings); k++ {
-		if settings[k].ChainId == targetChain {
-			setting = settings[k]
-			break
-		}
-	}
-	if setting.ChainId != targetChain {
-		return Settings{}, errors.New("No setting found for chain id " + strconv.Itoa(targetChain))
-	}
-	setting.TokenX.Address = strings.ToLower(setting.TokenX.Address)
-	return setting, nil
 }
 
 // loadRPCConfig loads the RPC list for the
@@ -248,7 +200,7 @@ func (a *App) SettingsToDB() error {
 	INSERT INTO referral_settings (property, value)
 	VALUES ($1, $2)
 	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
-	_, err := a.Db.Exec(query, "payment_max_lookback_days", a.Settings.PaymentMaxLookBackDays)
+	_, err := a.Db.Exec(query, "payment_max_lookback_days", a.RS.GetPaymentLookBackDays())
 
 	if err != nil {
 		return err
@@ -257,7 +209,7 @@ func (a *App) SettingsToDB() error {
 	// broker address
 	addr := a.PaymentExecutor.GetBrokerAddr().String()
 	addr = strings.ToLower(addr)
-	a.BrokerAddr = addr
+	a.RS.SetBrokerAddr(addr)
 	query = `
 	INSERT INTO referral_settings (property, value)
 	VALUES ($1, $2)
@@ -266,32 +218,8 @@ func (a *App) SettingsToDB() error {
 	if err != nil {
 		return err
 	}
-
-	// referral cut based on token holdings
-	dec := a.Settings.TokenX.Decimals
-	tkn := a.Settings.TokenX.Address
-
-	query = `DELETE FROM referral_setting_cut;`
-	_, err = a.Db.Exec(query)
-	if err != nil {
-		slog.Error(err.Error())
-	}
-
-	for k := 0; k < len(a.Settings.ReferrerCut); k++ {
-		perc := a.Settings.ReferrerCut[k][0]
-		holding := a.Settings.ReferrerCut[k][1]
-		holdingDecN := utils.FloatToDecN(holding, dec)
-		query = `
-		INSERT INTO referral_setting_cut (cut_perc, holding_amount_dec_n, token_addr)
-		VALUES ($1, $2, $3)`
-		_, err = a.Db.Exec(query, perc, holdingDecN.String(), tkn)
-		if err != nil {
-			slog.Error("could not insert referral setting:" + err.Error())
-			continue
-		}
-	}
-
-	return nil
+	// referral system specific settings
+	return a.RS.SettingsToDb()
 }
 
 // ConnectDB connects to the database and assigns the connection to the app struct
@@ -438,7 +366,7 @@ func (a *App) DBSetPayTxsConfirmed(txHash []string) {
 // SavePayments gets the payment events from on-chain and
 // updates or inserts database entries
 func (a *App) SavePayments() error {
-	tsStart := time.Now().Unix() - int64(a.Settings.PaymentMaxLookBackDays*86400)
+	tsStart := time.Now().Unix() - int64(a.RS.GetPaymentLookBackDays()*86400)
 	lookBackBlock, _, err := contracts.FindBlockWithTs(a.RpcClient, uint64(tsStart))
 	if err != nil {
 		lookBackBlock = 0
@@ -511,124 +439,6 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 	return nil
 }
 
-// DbGetReferralChainFromChild returns the percentage of trader
-// fees earned by an agency.
-// Holdings are relevant for pure referrers only. The fees for pure referrers
-// are calculated conditionally to this number
-func (a *App) DbGetReferralChainFromChild(child string, holdings *big.Int) ([]DbReferralChainOfChild, bool, error) {
-	child = strings.ToLower(child)
-	var chain []DbReferralChainOfChild
-	isAg := a.IsAgency(child)
-	if isAg {
-		var row DbReferralChainOfChild
-		query := "WITH RECURSIVE child_to_root AS (" +
-			"SELECT child, parent, pass_on, 1 AS lvl " +
-			"FROM referral_chain " +
-			"WHERE lower(child) = '" + child + "' " +
-			"UNION ALL " +
-			"SELECT c.child, c.parent, c.pass_on, cr.lvl + 1 " +
-			"FROM referral_chain c " +
-			"INNER JOIN child_to_root cr ON lower(cr.parent) = lower(c.child)" +
-			") " +
-			"SELECT parent, child, pass_on, lvl " +
-			"FROM child_to_root " +
-			"ORDER BY -lvl;"
-		rows, err := a.Db.Query(query)
-		defer rows.Close()
-		if err != nil {
-			return []DbReferralChainOfChild{}, isAg, err
-		}
-		var currentPassOn float64 = 1.0
-		for rows.Next() {
-			rows.Scan(&row.Parent, &row.Child, &row.PassOn, &row.Lvl)
-			row.PassOn = row.PassOn / 100.0
-			row.ParentPay = currentPassOn * (1.0 - row.PassOn)
-			currentPassOn = currentPassOn * row.PassOn
-			row.ChildAvail = currentPassOn
-			chain = append(chain, row)
-			fmt.Println(row)
-		}
-		return chain, isAg, nil
-	}
-
-	// referrer without agency, we calculate the rebate based
-	// on token holdings
-	query := `SELECT MAX(cut_perc) as max_cut
-			FROM referral_setting_cut rsc
-			LEFT join referral_token_holdings rth 
-			on lower(rth.referrer_addr) = $1
-			WHERE LOWER(rsc.token_addr)= $2
-			AND rsc.holding_amount_dec_n<=coalesce($3, rth.holding_amount_dec_n)`
-	var cut float64
-	err := a.Db.QueryRow(query, child, a.Settings.TokenX.Address, holdings.String()).Scan(&cut)
-	if err != nil {
-		slog.Error("Error for CutPercentageAgency address " + child)
-		return []DbReferralChainOfChild{}, isAg, errors.New("Could not get percentage")
-	}
-	cut = cut / 100
-	var el = DbReferralChainOfChild{
-		Parent:     a.BrokerAddr,
-		Child:      child,
-		PassOn:     cut,
-		ParentPay:  1.0 - cut,
-		ChildAvail: cut,
-		Lvl:        1,
-	}
-	chain = append(chain, el)
-
-	return chain, isAg, nil
-}
-
-// Cut percentage returns how much % (1% is represented as 1) of the broker fees
-// trickle down to this agency or referrer address
-func (a *App) CutPercentageAgency(addr string, holdingsDecN *big.Int) (float64, bool, error) {
-	addr = strings.ToLower(addr)
-	chain, isAg, err := a.DbGetReferralChainFromChild(addr, holdingsDecN)
-	if err != nil {
-		slog.Error("Error for CutPercentageAgency address " + addr)
-		return 0, false, errors.New("Could not get percentage")
-	}
-	if len(chain) == 0 && isAg {
-		// broker
-		return 100, true, nil
-	}
-	return 100 * chain[len(chain)-1].ChildAvail, isAg, nil
-
-}
-
-// CutPercentageCode calculates the percent (1% -> 1) rebate on broker trading fees,
-// when selecting this code
-// Code has to be "cleaned" outside this function
-func (a *App) CutPercentageCode(code string) (float64, error) {
-	query := `SELECT referrer_addr, trader_rebate_perc FROM
-		referral_code WHERE code=$1`
-	var refAddr string
-	var traderCut float64
-	err := a.Db.QueryRow(query, code).Scan(&refAddr, &traderCut)
-	if err != nil {
-		//no log
-		return 0, errors.New("Could not identify code")
-	}
-
-	h := new(big.Int).SetInt64(0)
-	passOnCut, _, err := a.CutPercentageAgency(refAddr, h)
-	if err != nil {
-		slog.Error("Error for CutPercentageCode code " + code)
-		return 0, errors.New("Could not identify cut")
-	}
-	return passOnCut * traderCut / 100, nil
-}
-
-// IsAgency returns true if the address is either the broker,
-// or a child in the referral chain (hence an agency)
-func (a *App) IsAgency(addr string) bool {
-	query := `SELECT LOWER(child) from referral_chain WHERE LOWER(child)=$1
-		UNION SELECT value as child from referral_settings WHERE property='broker_addr' AND LOWER(value)=$1`
-	var dbAddr string
-	err := a.Db.QueryRow(query, addr).Scan(&dbAddr)
-	return err != sql.ErrNoRows
-}
-
 // DbWriteTx write info about the payment transaction into referral_payment
 func (a *App) DbWriteTx(traderAddr string, code string, amounts []*big.Int, payees []common.Address, batchTs string, poolId uint32, tx string) {
 	slog.Info("Inserting Payment TX in DB")
@@ -689,24 +499,6 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		}
 	}
 	return nil
-}
-
-// HasLoopOnChainAddition returns true if when adding the new child to the
-// referral chain, there would be a loop
-func (a *App) HasLoopOnChainAddition(parent string, newChild string) (bool, error) {
-
-	h := new(big.Int).SetInt64(0)
-	chain, _, err := a.DbGetReferralChainFromChild(parent, h)
-	if err != nil {
-		return true, err
-	}
-	newChild = strings.ToLower(newChild)
-	for _, el := range chain {
-		if strings.ToLower(el.Parent) == newChild || strings.ToLower(el.Child) == newChild {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // SelectCode tries to select a given code for a trader. Future trades will
@@ -816,84 +608,6 @@ func (a *App) UpsertCode(csp utils.APICodePayload) error {
 	return nil
 }
 
-// Refer handles new referral requests (checks and insert into db)
-func (a *App) Refer(rpl utils.APIReferPayload) error {
-	var passOn float32 = float32(rpl.PassOnPercTDF) / 100.0
-	rpl.ParentAddr = strings.ToLower(rpl.ParentAddr)
-	// parent can only refer if they are the broker or a child
-	if !a.IsAgency(rpl.ParentAddr) {
-		return errors.New("Not an agency")
-	}
-	rpl.ReferToAddr = strings.ToLower(rpl.ReferToAddr)
-	h, err := a.HasLoopOnChainAddition(rpl.ParentAddr, rpl.ReferToAddr)
-	if err != nil {
-		slog.Error("HasLoopOnChainAddition failed")
-		return errors.New("Failed")
-	}
-	if h {
-		return errors.New("Referral already in chain")
-	}
-	query := "SELECT child from referral_chain WHERE LOWER(child)=$1"
-	var addr string
-	err = a.Db.QueryRow(query, rpl.ReferToAddr).Scan(&addr)
-	if err != sql.ErrNoRows {
-		return errors.New("Refer to addr already in use")
-	}
-	// referral chain length
-	chain, _, err := a.DbGetReferralChainFromChild(rpl.ParentAddr, big.NewInt(0))
-	if err == nil && len(chain) > env.MAX_REFERRAL_CHAIN_LEN {
-		slog.Info("Max referral chain length reached for " + rpl.ParentAddr)
-		return errors.New("Reached maximum number of referrals")
-	}
-	// now safe to insert
-	query = `INSERT INTO referral_chain (parent, child, pass_on)
-          	 VALUES ($1, $2, $3)`
-	_, err = a.Db.Exec(query, rpl.ParentAddr, rpl.ReferToAddr, passOn)
-	if err != nil {
-		slog.Error("Failed to insert referral" + err.Error())
-		return errors.New("Failed to insert referral")
-	}
-	return nil
-}
-
-// DbUpdateTokenHoldings queries balances of TokenX from the blockchain
-// and updates the holdings for active referrers in the database
-func (a *App) DbUpdateTokenHoldings() error {
-	// select referrers that are no agency (not in referral chain)
-	refAddr, lastUpdate, err := a.DbGetActiveReferrers()
-
-	tkn, err := a.CreateErc20Instance(a.Settings.TokenX.Address)
-	if err != nil {
-		return err
-	}
-	nowTime := time.Now()
-	for k := 0; k < len(refAddr); k++ {
-		currReferrerAddr := refAddr[k]
-		if lastUpdate[k] != (time.Time{}) && nowTime.Sub(lastUpdate[k]).Hours() < env.REFERRER_TOKENX_BAL_FREQ_H {
-			slog.Info("No balance update required for referrer " + currReferrerAddr)
-			continue
-		}
-		slog.Info("Updating balance for referrer" + currReferrerAddr)
-
-		holdings, err := a.QueryTokenBalance(tkn, currReferrerAddr)
-		if err != nil {
-			slog.Error("Error when trying to get token balance:" + err.Error())
-			continue
-		}
-		query := `
-		INSERT INTO referral_token_holdings (referrer_addr, holding_amount_dec_n, token_addr)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (referrer_addr, token_addr) DO UPDATE SET holding_amount_dec_n = EXCLUDED.holding_amount_dec_n`
-		_, err = a.Db.Exec(query, currReferrerAddr, holdings.String(), a.Settings.TokenX.Address)
-		if err != nil {
-			slog.Error("Error when trying to upsert token balance:" + err.Error())
-			continue
-		}
-	}
-
-	return nil
-}
-
 // HistoricEarnings calculates historic earnings of any participant
 // (broker-payout address, agent, referrer, trader)
 func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, error) {
@@ -923,76 +637,6 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 		history = append(history, el)
 	}
 	return history, nil
-}
-
-// DbGetActiveReferrers returns a list of addresses that are
-// (1) not an agency, (2) have a code which is used in the
-// view referral_aggr_fees_per_trader. The func also returns the last
-// token balance update time
-func (a *App) DbGetActiveReferrers() ([]string, []time.Time, error) {
-	query := `select distinct(lower(rc.referrer_addr)), rth.last_updated 
-			  from referral_aggr_fees_per_trader rafpt 
-			  join referral_code rc 
-				on rc.code = rafpt.code
-				and LOWER(rc.referrer_addr) not in (select LOWER(rc2.child) from referral_chain rc2)
-			  left join referral_token_holdings rth 
-				on LOWER(rth.referrer_addr) = LOWER(rc.referrer_addr)`
-	rows, err := a.Db.Query(query)
-	defer rows.Close()
-	if err != nil {
-		msg := ("Error getting DbGetActiveReferrers" + err.Error())
-		return []string{}, []time.Time{}, errors.New(msg)
-	}
-	var refAddr []string
-	var lastUpdts []time.Time
-	for rows.Next() {
-		var addr string
-		var ts time.Time
-		rows.Scan(&addr, &ts)
-		refAddr = append(refAddr, addr)
-		lastUpdts = append(lastUpdts, ts)
-	}
-	return refAddr, lastUpdts, nil
-}
-
-func (a *App) DbGetMyReferrals(addr string) ([]utils.APIResponseMyReferrals, error) {
-	// as agency select downstream partners and pass-on
-	query := `select child, pass_on as pass_on_perc
-			   from referral_chain rc 
-			  where lower(rc.parent) = $1
-				union -- as referrer:
-			  select code as child, trader_rebate_perc as pass_on_perc
-				from referral_code 
-				where lower(referrer_addr) = $1`
-	rows, err := a.Db.Query(query, addr)
-	defer rows.Close()
-	if err != nil {
-		slog.Error("Error in DbGetMyReferrals: " + err.Error())
-		return []utils.APIResponseMyReferrals{}, errors.New("failed to get referrals")
-	}
-	var res []utils.APIResponseMyReferrals
-	for rows.Next() {
-		var el utils.APIResponseMyReferrals
-		rows.Scan(&el.Referral, &el.PassOnPerc)
-		res = append(res, el)
-	}
-	return res, nil
-}
-
-func (a *App) DbGetMyCodeSelection(addr string) (string, error) {
-	query := `select code
-			  from referral_code_usage rcu 
-			  where lower(rcu.trader_addr) = $1
-			  and valid_to>NOW() and valid_from<NOW()`
-	var code string
-	err := a.Db.QueryRow(query, addr).Scan(&code)
-	if err == sql.ErrNoRows {
-		return "", nil
-	} else if err != nil {
-		slog.Error("DbMyCodeSelection failed:" + err.Error())
-		return "", errors.New("Code retrieval failed")
-	}
-	return code, nil
 }
 
 // DbSetPaymentExecFinished sets the batch number and value for hasFinished
@@ -1025,21 +669,4 @@ func (a *App) DbGetPaymentExecHasFinished() (bool, error) {
 		return true, err
 	}
 	return hasFinished == "true", nil
-}
-
-func (a *App) DbGetTokenInfo() (utils.APIResponseTokenHoldings, error) {
-	query := `select cut_perc, holding_amount_dec_n/power(10, $1) as holding, token_addr from referral_setting_cut rsc`
-	rows, err := a.Db.Query(query, a.Settings.TokenX.Decimals)
-	defer rows.Close()
-	if err != nil {
-		slog.Error("Error in DbGetTokenInfo: " + err.Error())
-		return utils.APIResponseTokenHoldings{}, errors.New("failed to get token info")
-	}
-	var res utils.APIResponseTokenHoldings
-	for rows.Next() {
-		var el utils.APIRebate
-		rows.Scan(&el.CutPerc, &el.Holding, &res.TokenAddr)
-		res.Rebates = append(res.Rebates, el)
-	}
-	return res, nil
 }

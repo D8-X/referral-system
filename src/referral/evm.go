@@ -53,7 +53,7 @@ func (a *App) CreateMultipayInstance() error {
 	if a.RpcClient == nil {
 		return errors.New("CreateMultipayInstance requires RpcClient")
 	}
-	evmAddr := common.HexToAddress(a.Settings.MultiPayContractAddr)
+	evmAddr := common.HexToAddress(a.RS.GetMultiPayAddr())
 	c, err := contracts.NewMultiPay(evmAddr, a.RpcClient)
 	if err != nil {
 		return errors.New("Failed to instantiate Proxy contract: " + err.Error())
@@ -100,16 +100,16 @@ func (exc *basePayExec) CreateAuth() (*bind.TransactOpts, error) {
 	return auth, nil
 }
 
-func (a *App) CreateErc20Instance(tokenAddr string) (*contracts.Erc20, error) {
+func CreateErc20Instance(tokenAddr string, rpc *ethclient.Client) (*contracts.Erc20, error) {
 	tknAddr := common.HexToAddress(tokenAddr)
-	instance, err := contracts.NewErc20(tknAddr, a.RpcClient)
+	instance, err := contracts.NewErc20(tknAddr, rpc)
 	if err != nil {
 		return nil, err
 	}
 	return instance, nil
 }
 
-func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) (*big.Int, error) {
+func QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) (*big.Int, error) {
 	ownerAddr := common.HexToAddress(tknOwnerAddr)
 	bal, err := tknCtrct.BalanceOf(&bind.CallOpts{}, ownerAddr)
 	return bal, err

@@ -1,4 +1,4 @@
-package api
+package referral
 
 import (
 	"encoding/hex"
@@ -7,7 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"referral-system/src/referral"
+
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,7 +43,7 @@ type JWKSet struct {
 // RegisterSocialUser checks the validity of the user login information (web3auth)
 // and if a new valid twitter user stores the id/address mapping in the DB and
 // makes the Twitter ranking
-func RegisterSocialUser(tokenString, walletAddr string, app *referral.App) error {
+func (rs *SocialSystem) RegisterSocialUser(tokenString, walletAddr string) error {
 	addr, payload, err := verifyWeb3Auth(tokenString, walletAddr)
 	if err != nil {
 		return err
@@ -55,7 +55,7 @@ func RegisterSocialUser(tokenString, walletAddr string, app *referral.App) error
 		return nil
 	}
 	twitterId := id[1]
-	return app.SignUpSocialUser(twitterId, addr.Hex())
+	return rs.SignUpSocialUser(twitterId, addr.Hex())
 }
 
 // verifyWeb3Auth verifies the JWT token from web3auth and returns the EVM-address and the payload if

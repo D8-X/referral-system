@@ -92,6 +92,25 @@ by their addresses.
   ]
 }
 ```
+social:
+
+```
+{
+  "type": "my-referrals",
+  "data": [
+    {
+      "referral": "<twitter-id>|handle",
+      "PassOnPerc": <percent of fee>
+    },
+    {
+      ..
+    },
+    {
+     ..
+    }
+  ]
+}
+```
 
 No codes or agency referrals in the chain:
 ```

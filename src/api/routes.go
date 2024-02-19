@@ -10,39 +10,51 @@ import (
 // RegisterRoutes registers all API routes for D8X-Backend application
 func RegisterRoutes(router chi.Router, app *referral.App) {
 
-	// ***-- code system ---***
-	router.Get("/my-code-selection", func(w http.ResponseWriter, r *http.Request) {
-		OnMyCodeSelection(w, r, app)
-	})
-	// Endpoint: /code-rebate?code=ABCD
-	router.Get("/code-rebate", func(w http.ResponseWriter, r *http.Request) {
-		onCodeRebate(w, r, app)
-	})
-
-	// Endpoint: /my-referrals?addr=0xabce...
-	router.Get("/my-referrals", func(w http.ResponseWriter, r *http.Request) {
-		onMyReferrals(w, r, app)
-	})
-
 	// Endpoint: /refer-cut
+	// only code referral
 	router.Get("/refer-cut", func(w http.ResponseWriter, r *http.Request) {
 		onReferCut(w, r, app)
 	})
 
+	// only code referral
 	router.Post("/select-code", func(w http.ResponseWriter, r *http.Request) {
 		onSelectCode(w, r, app)
 	})
 
+	// only code referral
 	router.Post("/refer", func(w http.ResponseWriter, r *http.Request) {
 		onRefer(w, r, app)
 	})
 
+	// only code referral
 	router.Post("/upsert-code", func(w http.ResponseWriter, r *http.Request) {
 		onUpsertCode(w, r, app)
 	})
 
+	// only code referral
 	router.Get("/token-info", func(w http.ResponseWriter, r *http.Request) {
 		onTokenInfo(w, r, app)
+	})
+
+	// *** shared
+
+	// Endpoint: /code-rebate?code=ABCD
+	// Code system based on code
+	// Social system based on trader code-rebate?code=<twitter-number>
+	router.Get("/code-rebate", func(w http.ResponseWriter, r *http.Request) {
+		onCodeRebate(w, r, app)
+	})
+
+	// ***-- code system ---***
+	// social: return twitter handle
+	router.Get("/my-code-selection", func(w http.ResponseWriter, r *http.Request) {
+		OnMyCodeSelection(w, r, app)
+	})
+
+	// Endpoint: /my-referrals?addr=0xabce...
+	// social: all where I am top 3
+	router.Get("/my-referrals", func(w http.ResponseWriter, r *http.Request) {
+		onMyReferrals(w, r, app)
 	})
 
 	// ***-- common ---***
@@ -69,6 +81,11 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 	// Endpoint: /social-verify, POST
 	router.Post("/social-verify", func(w http.ResponseWriter, r *http.Request) {
 		onSocialVerify(w, r, app)
+	})
+
+	// ranking of social accounts (new)
+	router.Get("/referral-ranking", func(w http.ResponseWriter, r *http.Request) {
+		onReferralRanking(w, r, app)
 	})
 
 }

@@ -43,6 +43,7 @@ type ReferralSystem interface {
 	GetPaymentLookBackDays() int
 	SetDb(db *sql.DB)
 	SettingsToDb() error
+	GetType() string
 }
 
 type Rpc struct {
@@ -497,113 +498,6 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
-	}
-	return nil
-}
-
-// SelectCode tries to select a given code for a trader. Future trades will
-// be using this code.
-// Signature must have been checked
-// before. The error message returned (if any) is exposed to the API
-func (a *App) SelectCode(csp utils.APICodeSelectionPayload) error {
-	csp.TraderAddr = strings.ToLower(csp.TraderAddr)
-	timeNow := time.Now().Unix()
-	// code exists?
-	query := `SELECT expiry
-		FROM referral_code
-		where code=$1`
-	var ts time.Time
-	err := a.Db.QueryRow(query, csp.Code).Scan(&ts)
-	if err != sql.ErrNoRows && err != nil {
-		slog.Info("Failed to search for code:" + err.Error())
-		return errors.New("Failed")
-	} else if err == sql.ErrNoRows {
-		slog.Info("Code does not exist")
-		return errors.New("Failed")
-	}
-	if ts != (time.Time{}) && ts.Before(time.Unix(timeNow, 0)) {
-		slog.Info("Code " + csp.Code + " expired")
-		return errors.New("Code expired")
-	}
-
-	// first reset valid until for code
-	type SQLResponse struct {
-		TraderAddr string
-		Code       string
-		ValidFrom  time.Time
-		ValidTo    time.Time
-	}
-	var latestCode SQLResponse
-	query = `
-		SELECT trader_addr, code, valid_from, valid_to
-		FROM referral_code_usage
-		WHERE LOWER(trader_addr)=$1
-		ORDER BY valid_to DESC
-		LIMIT 1`
-	err = a.Db.QueryRow(query, csp.TraderAddr).Scan(&latestCode.TraderAddr, &latestCode.Code, &latestCode.ValidFrom, &latestCode.ValidTo)
-	if err != sql.ErrNoRows && err != nil {
-		slog.Info("Failed to query latest code:" + err.Error())
-		return errors.New("Failed")
-	}
-
-	if latestCode.Code != "" {
-		if latestCode.Code == csp.Code {
-			return errors.New("Code already selected")
-		}
-		// update valid to of old code
-		query = `UPDATE referral_code_usage
-		SET valid_to=to_timestamp($1)
-		WHERE LOWER(trader_addr)=$2
-			AND code=$3
-			AND valid_to=$4`
-		_, err := a.Db.Exec(query, timeNow, csp.TraderAddr, latestCode.Code, latestCode.ValidTo)
-		if err != nil {
-			slog.Error("Failed to insert data: " + err.Error())
-			return errors.New("Failed updating existing code")
-		}
-	}
-	// now insert new code
-	query = `INSERT INTO referral_code_usage (trader_addr, valid_from, code) VALUES ($1, to_timestamp($2), $3)`
-	_, err = a.Db.Exec(query, csp.TraderAddr, timeNow, csp.Code)
-	if err != nil {
-		slog.Error("Failed to insert data: " + err.Error())
-		return errors.New("Failed inserting new code")
-	}
-	return nil
-}
-
-// UpsertCode inserts new codes and updates the code rebate
-func (a *App) UpsertCode(csp utils.APICodePayload) error {
-	var passOn float32 = float32(csp.PassOnPercTDF) / 100.0
-	// check whether code exists
-	query := `SELECT referrer_addr 
-		FROM referral_code
-		WHERE code=$1`
-	var refAddr string
-	err := a.Db.QueryRow(query, csp.Code).Scan(&refAddr)
-	if err != sql.ErrNoRows && err != nil {
-		slog.Info("Failed to query latest code:" + err.Error())
-		return errors.New("Failed")
-	} else if err == sql.ErrNoRows {
-		// not found, we can insert
-		query = `INSERT INTO referral_code (code, referrer_addr, trader_rebate_perc)
-          VALUES ($1, $2, $3)`
-		_, err := a.Db.Exec(query, csp.Code, csp.ReferrerAddr, passOn)
-		if err != nil {
-			slog.Error("Failed to insert code" + err.Error())
-			return errors.New("Failed to insert code")
-		}
-		return nil
-	}
-	// found, we check whether the referral addr is correct
-	if strings.ToLower(refAddr) != strings.ToLower(csp.ReferrerAddr) {
-		return errors.New("Not code owner")
-	}
-	query = `UPDATE referral_code SET trader_rebate_perc = $1
-			 WHERE code = $2`
-	_, err = a.Db.Exec(query, passOn, csp.Code)
-	if err != nil {
-		return errors.New("Failed to insert data: " + err.Error())
 	}
 	return nil
 }

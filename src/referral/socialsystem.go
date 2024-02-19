@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+const SOCIAL_SYS_TYPE = "SocialSystem"
+
 type SocialSystem struct {
 	Config     SocialSysConf
 	Xsdk       *XSdk
@@ -34,6 +36,10 @@ type SocialSysConf struct {
 type XSdk struct {
 	Client   tc.Client
 	Analyzer *tc.Analyzer
+}
+
+func (c *SocialSystem) GetType() string {
+	return SOCIAL_SYS_TYPE
 }
 
 func NewSocialSystem(twitterAuthBearer string) *SocialSystem {

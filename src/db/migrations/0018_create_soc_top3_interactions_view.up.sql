@@ -1,8 +1,13 @@
 CREATE OR REPLACE VIEW top3_interactions AS
-SELECT ati.id, ati.addr, top_interactions.id_interacted, top_interactions.addr_interacted, coalesce(top_interactions.count,0) as count
+SELECT ati.id, 
+    ati.addr, 
+    top_interactions.id_interacted, 
+    top_interactions.addr_interacted, 
+    COALESCE(top_interactions.count,0) AS count,
+    COALESCE(top_interactions.rnk, 0) AS rnk
 FROM soc_addr_to_id ati 
 LEFT JOIN (
-    SELECT id, id_interacted, addr_interacted, count
+    SELECT id, id_interacted, addr_interacted, count, row_num as rnk
     FROM (
         SELECT 
             c0.id,

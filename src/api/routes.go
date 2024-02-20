@@ -83,7 +83,7 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 		onSocialVerify(w, r, app)
 	})
 
-	// ranking of social accounts (new)
+	// ranking of social accounts (new), ?n=10
 	router.Get("/referral-ranking", func(w http.ResponseWriter, r *http.Request) {
 		onReferralRanking(w, r, app)
 	})

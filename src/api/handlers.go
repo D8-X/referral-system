@@ -253,7 +253,7 @@ func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 }
 
 // onCodeRebate implements the endpoint /code-rebate?code=ABCD
-// which for the code system is based on code a code
+// which for the code system is based on a referral code
 // and for the social system based on trader code-rebate?code=<twitter-number>
 func onCodeRebate(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	// Read the JSON data from the request body
@@ -272,8 +272,24 @@ func onCodeRebate(w http.ResponseWriter, r *http.Request, app *referral.App) {
 }
 
 // onSocialSysRebate returns the rebate associated with the given twitter-id
-func socialSysRebate(w http.ResponseWriter, app *referral.App, code string) {
-	// TODO
+func socialSysRebate(w http.ResponseWriter, app *referral.App, id string) {
+	// switch to socialSystem
+	socSystem, ok := app.RS.(*referral.SocialSystem)
+	if !ok {
+		slog.Error("failed to assert as SocialSystem")
+		http.Error(w, string(formatError("failed")), http.StatusBadRequest)
+		return
+	}
+	rebate, err := socSystem.GetMyRebate(id)
+	if err != nil {
+		slog.Error("GetMyRebate: " + err.Error())
+		http.Error(w, string(formatError("n/a")), http.StatusBadRequest)
+		return
+	}
+	// Write the JSON response
+	stringValue := strconv.FormatFloat(rebate, 'f', -1, 64)
+	jsonResponse := `{"type":"code-rebate", "data":{"rebate_percent": ` + stringValue + `}}`
+	w.Write([]byte(jsonResponse))
 }
 
 // onCodeSysRebate returns the trader rebate associated with the given
@@ -363,7 +379,30 @@ func OnMyCodeSelection(w http.ResponseWriter, r *http.Request, app *referral.App
 
 // idSelection returns the twitter handle for the given trader address
 func idSelection(w http.ResponseWriter, app *referral.App, addr string) {
-	// TODO
+	// switch to socialSystem
+	socSystem, ok := app.RS.(*referral.SocialSystem)
+	if !ok {
+		slog.Error("failed to assert as SocialSystem")
+		http.Error(w, string(formatError("failed")), http.StatusBadRequest)
+		return
+	}
+	user, err := socSystem.GetUser(addr)
+	if err != nil {
+		errMsg := err.Error()
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	// Write the JSON response
+	response := utils.APIResponse{Type: "my-code-selection", Data: user.Id}
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(response)
+	if err != nil {
+		slog.Error("OnMyCodeSelection unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResponse)
 }
 
 // codeSelection returns the selected code for the given trader address
@@ -438,13 +477,7 @@ func onTokenInfo(w http.ResponseWriter, r *http.Request, app *referral.App) {
 // id is in the top3
 func onMyReferrals(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	addr := r.URL.Query().Get("addr")
-	if addr == "" || !isValidEvmAddr(addr) {
-		errMsg := "Incorrect 'addr' parameter"
-		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
-		return
-	}
 	addr = strings.ToLower(addr)
-
 	if app.RS.GetType() == referral.SOCIAL_SYS_TYPE {
 		mySocialReferrals(w, app, addr)
 	} else if app.RS.GetType() == referral.CODE_SYS_TYPE {
@@ -452,11 +485,37 @@ func onMyReferrals(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	}
 }
 
+// mySocialReferrals returns the ids for which the given id is in the top 3
 func mySocialReferrals(w http.ResponseWriter, app *referral.App, addr string) {
-	// todo
+	if addr == "" {
+		errMsg := "'addr' param: provide id or address"
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+	// switch to socialSystem
+	socSystem, ok := app.RS.(*referral.SocialSystem)
+	if !ok {
+		slog.Error("failed to assert as SocialSystem")
+		http.Error(w, string(formatError("failed")), http.StatusBadRequest)
+		return
+	}
+	ref, err := socSystem.GetMyReferrals(addr)
+	if err != nil {
+		errMsg := err.Error()
+		slog.Error("mySocialReferrals unable to marshal response" + err.Error())
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	respondMyReferrals(w, ref)
 }
 
 func myCodeReferrals(w http.ResponseWriter, app *referral.App, addr string) {
+	if addr == "" || !isValidEvmAddr(addr) {
+		errMsg := "Incorrect 'addr' parameter"
+		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
+		return
+	}
+
 	// switch to codesystem
 	codeSystem, ok := app.RS.(*referral.CodeSystem)
 	if !ok {
@@ -470,7 +529,10 @@ func myCodeReferrals(w http.ResponseWriter, app *referral.App, addr string) {
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
 		return
 	}
+	respondMyReferrals(w, ref)
+}
 
+func respondMyReferrals(w http.ResponseWriter, ref []utils.APIResponseMyReferrals) {
 	// Set the Content-Type header to application/json
 	w.Header().Set("Content-Type", "application/json")
 	// Write the JSON response
@@ -481,9 +543,8 @@ func myCodeReferrals(w http.ResponseWriter, app *referral.App, addr string) {
 	// Marshal the struct into JSON
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
-		slog.Error("onMyReferrals unable to marshal response" + err.Error())
-		errMsg := "Unavailable"
-		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		slog.Error("myCodeReferrals unable to marshal response" + err.Error())
+		http.Error(w, string(formatError("Unavailable")), http.StatusInternalServerError)
 		return
 	}
 	w.Write(jsonResponse)
@@ -545,8 +606,32 @@ func onReferralRanking(w http.ResponseWriter, r *http.Request, app *referral.App
 		http.Error(w, string(formatError("n/a for code system")), http.StatusBadRequest)
 		return
 	}
-	// TODO
-
+	numStr := r.URL.Query().Get("n")
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		http.Error(w, string(formatError("provide n")), http.StatusInternalServerError)
+		return
+	}
+	// switch to social system
+	socSystem, ok := app.RS.(*referral.SocialSystem)
+	if !ok {
+		slog.Error("failed to assert as SocialSystem")
+		http.Error(w, string(formatError("failed")), http.StatusBadRequest)
+		return
+	}
+	gb, err := socSystem.GetGlobalLeaders(num)
+	if err != nil {
+		slog.Error("onReferralRanking unable to GetGlobalLeaders" + err.Error())
+		http.Error(w, string(formatError("Unavailable")), http.StatusInternalServerError)
+		return
+	}
+	jsonResponse, err := json.Marshal(gb)
+	if err != nil {
+		slog.Error("onReferralRanking unable to marshal response" + err.Error())
+		http.Error(w, string(formatError("Unavailable")), http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonResponse)
 }
 
 // onSocialVerify handles the POST endpoint /social-verify only available

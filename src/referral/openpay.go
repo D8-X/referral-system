@@ -20,6 +20,14 @@ type AggregatedFeesRow struct {
 	TokenAddr           string
 	TokenDecimals       uint8
 }
+type AggrFeesOpenPay struct {
+	PoolId              uint32
+	Code                string
+	BrokerFeeCc         string
+	LastTradeConsidered time.Time
+	TokenName           string
+	TokenDecimals       uint8
+}
 
 func (a *App) SchedulePayment() {
 	// Define the timestamp when the task is due (replace with your timestamp)
@@ -128,6 +136,31 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 		scale[pool] = ratio
 	}
 	return scale, nil
+}
+
+func (app *App) OpenPayGeneric(traderAddr string) (utils.APIResponseOpenEarnings, error) {
+
+	// get aggregated fees per pool and associated margin token info
+	// for the given trader
+	query := `SELECT 
+				mti.pool_id, rafpt.code, rafpt.broker_fee_cc, 
+				rafpt.last_trade_considered_ts, 
+				mti.token_name, mti.token_decimals
+			FROM referral_aggr_fees_per_trader rafpt
+			JOIN margin_token_info mti
+			ON mti.pool_id = rafpt.pool_id
+			join referral_settings rs
+			on LOWER(rs.value) = LOWER(rafpt.broker_addr)
+			and rs.property='broker_addr'
+			WHERE LOWER(trader_addr)=$1`
+
+	rows, err := app.Db.Query(query, traderAddr)
+	if err != nil {
+		slog.Error("Error for open pay" + err.Error())
+		return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
+	}
+	defer rows.Close()
+	return app.RS.OpenPay(rows, app, traderAddr)
 }
 
 // ProcessAllPayments determins how much to pay and ultimately delegates

@@ -208,6 +208,7 @@ func (rs *SocialSystem) GetMyRebate(addrOrId string) (float64, error) {
 }
 
 // GetFeeCutsForTrader determines what percentage to send from the given trader to which participants.
+// order: trader, broker, participant1-3
 // That is, calculate the cut of the fees paid by the trader
 // that is to be re-distributed according to the social graph and fee
 // rebate settings.
@@ -228,7 +229,11 @@ func (rs *SocialSystem) GetFeeCutsForTrader(addrTrader string) ([]FeeCut, error)
 		cut = int(rs.Config.KnownTrdrCutPerc * 100)
 	}
 	cutDistr += cut
+	// 1. Trader
 	cuts = append(cuts, FeeCut{Addr: addrTrader, Cut2Dec: cut})
+	// 2. Broker (cut not calculated yet)
+	cuts = append(cuts, FeeCut{})
+	// 3. top 3
 	for k, user := range topI {
 		cut = int(rs.Config.SocialCutPerc[k] * 100)
 		cuts = append(cuts, FeeCut{Addr: user.Addr, Cut2Dec: cut})
@@ -251,5 +256,7 @@ func (rs *SocialSystem) GetFeeCutsForTrader(addrTrader string) ([]FeeCut, error)
 	if cutDistr > 10000 {
 		return nil, errors.New("cut exceeds 100%, revisit config")
 	}
+	// broker gets residual
+	cuts[1] = FeeCut{Addr: rs.BrokerAddr, Cut2Dec: 10000 - cutDistr}
 	return cuts, nil
 }

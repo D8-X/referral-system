@@ -297,39 +297,14 @@ func (rs *CodeSystem) dbGetReferralChainFromChild(child string, holdings *big.In
 	return chain, isAg, nil
 }
 
-func (rs *CodeSystem) OpenPay(app *App, traderAddr string) (utils.APIResponseOpenEarnings, error) {
-	type AggrFees struct {
-		PoolId              uint32
-		Code                string
-		BrokerFeeCc         string
-		LastTradeConsidered time.Time
-		TokenName           string
-		TokenDecimals       uint8
-	}
-	// get aggregated fees per pool and associated margin token info
-	// for the given trader
-	query := `SELECT 
-				mti.pool_id, rafpt.code, rafpt.broker_fee_cc, 
-				rafpt.last_trade_considered_ts, 
-				mti.token_name, mti.token_decimals
-			FROM referral_aggr_fees_per_trader rafpt
-			JOIN margin_token_info mti
-			ON mti.pool_id = rafpt.pool_id
-			join referral_settings rs
-			on LOWER(rs.value) = LOWER(rafpt.broker_addr)
-			and rs.property='broker_addr'
-			WHERE LOWER(trader_addr)=$1`
-	rows, err := app.Db.Query(query, traderAddr)
-	if err != nil {
-		slog.Error("Error for open pay" + err.Error())
-		return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
-	}
-	defer rows.Close()
+// OpenPay determines how much the given trader gets paid back
+// from his trading activity
+func (rs *CodeSystem) OpenPay(rows *sql.Rows, app *App, traderAddr string) (utils.APIResponseOpenEarnings, error) {
 	var payments []utils.OpenPay
 	var codeChain DbReferralChainOfChild
 	var res utils.APIResponseOpenEarnings
 	for rows.Next() {
-		var el AggrFees
+		var el AggrFeesOpenPay
 		rows.Scan(&el.PoolId, &el.Code, &el.BrokerFeeCc,
 			&el.LastTradeConsidered, &el.TokenName, &el.TokenDecimals)
 		if el.Code == env.DEFAULT_CODE {
@@ -499,11 +474,11 @@ func (rs *CodeSystem) DbGetMyReferrals(addr string) ([]utils.APIResponseMyReferr
 				from referral_code 
 				where lower(referrer_addr) = $1`
 	rows, err := rs.Db.Query(query, addr)
-	defer rows.Close()
 	if err != nil {
 		slog.Error("Error in DbGetMyReferrals: " + err.Error())
 		return []utils.APIResponseMyReferrals{}, errors.New("failed to get referrals")
 	}
+	defer rows.Close()
 	var res []utils.APIResponseMyReferrals
 	for rows.Next() {
 		var el utils.APIResponseMyReferrals
@@ -524,7 +499,7 @@ func (rs *CodeSystem) DbGetMyCodeSelection(addr string) (string, error) {
 		return "", nil
 	} else if err != nil {
 		slog.Error("DbMyCodeSelection failed:" + err.Error())
-		return "", errors.New("Code retrieval failed")
+		return "", errors.New("code retrieval failed")
 	}
 	return code, nil
 }
@@ -542,11 +517,11 @@ func (rs *CodeSystem) DbGetActiveReferrers() ([]string, []time.Time, error) {
 			  left join referral_token_holdings rth 
 				on LOWER(rth.referrer_addr) = LOWER(rc.referrer_addr)`
 	rows, err := rs.Db.Query(query)
-	defer rows.Close()
 	if err != nil {
 		msg := ("Error getting DbGetActiveReferrers" + err.Error())
 		return []string{}, []time.Time{}, errors.New(msg)
 	}
+	defer rows.Close()
 	var refAddr []string
 	var lastUpdts []time.Time
 	for rows.Next() {
@@ -568,7 +543,9 @@ func (rs *CodeSystem) PreProcessPayments(rpc *ethclient.Client) error {
 func (rs *CodeSystem) dbUpdateTokenHoldings(rpc *ethclient.Client) error {
 	// select referrers that are no agency (not in referral chain)
 	refAddr, lastUpdate, err := rs.DbGetActiveReferrers()
-
+	if err != nil {
+		return err
+	}
 	tkn, err := CreateErc20Instance(rs.Config.TokenX.Address, rpc)
 	if err != nil {
 		return err

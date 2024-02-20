@@ -725,7 +725,7 @@ func onOpenPay(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		return
 	}
 	addr = strings.ToLower(addr)
-	res, err := app.RS.OpenPay(app, addr)
+	res, err := app.OpenPayGeneric(addr)
 	if err != nil {
 		errMsg := err.Error()
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)

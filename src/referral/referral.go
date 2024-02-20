@@ -33,7 +33,7 @@ type App struct {
 
 type ReferralSystem interface {
 	ProcessPayments(app *App, rows *sql.Rows, scale map[uint32]float64, batchTs string)
-	OpenPay(app *App, traderAddr string) (utils.APIResponseOpenEarnings, error)
+	OpenPay(rows *sql.Rows, app *App, traderAddr string) (utils.APIResponseOpenEarnings, error)
 	PreProcessPayments(rpc *ethclient.Client) error
 	LoadConfig(fileName string, chainId int) error
 	SetBrokerAddr(addr string)

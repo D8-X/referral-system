@@ -11,7 +11,7 @@ import (
 )
 
 func FindBlockWithTs(client *ethclient.Client, ts uint64) (uint64, uint64, error) {
-	blockB, err := client.BlockByNumber(context.Background(), nil)
+	blockB, err := BlockByNumberL2Compat(client, context.Background(), nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -32,7 +32,7 @@ func FindBlockWithTs(client *ethclient.Client, ts uint64) (uint64, uint64, error
 		}
 		numA = numB - timeBack
 		numABig := big.NewInt(int64(numA))
-		blockA, err := client.BlockByNumber(context.Background(), numABig)
+		blockA, err := BlockByNumberL2Compat(client, context.Background(), numABig)
 		numCalls++
 		if err != nil {
 			return 0, 0, errors.New("RPC issue in FindBlockFromTs:" + err.Error())
@@ -59,7 +59,7 @@ func binSearch(client *ethclient.Client, numA uint64, tsA uint64, numB uint64, t
 	for {
 		numP = (numA + numB) / 2
 		numPBig := big.NewInt(int64(numP))
-		blockP, err := client.BlockByNumber(context.Background(), numPBig)
+		blockP, err := BlockByNumberL2Compat(client, context.Background(), numPBig)
 		numCalls++
 		if err != nil {
 			return 0, 0, numCalls, errors.New("RPC issue in FindBlockFromTs(search):" + err.Error())

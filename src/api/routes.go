@@ -38,6 +38,10 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 
 	// *** shared
 
+	router.Get("/info", func(w http.ResponseWriter, r *http.Request) {
+		onInfo(w, r, app)
+	})
+
 	// Endpoint: /code-rebate?code=ABCD
 	// Code system based on code
 	// Social system based on trader code-rebate?code=<twitter-number>
@@ -46,10 +50,6 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 	})
 
 	// ***-- code system ---***
-	// social: return twitter handle
-	router.Get("/my-code-selection", func(w http.ResponseWriter, r *http.Request) {
-		OnMyCodeSelection(w, r, app)
-	})
 
 	// Endpoint: /my-referrals?addr=0xabce...
 	// social: all where I am top 3
@@ -58,6 +58,11 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 	})
 
 	// ***-- common ---***
+	// social: return twitter handle
+	router.Get("/my-code-selection", func(w http.ResponseWriter, r *http.Request) {
+		OnMyCodeSelection(w, r, app)
+	})
+
 	// Endpoint: /earnings
 	router.Get("/earnings", func(w http.ResponseWriter, r *http.Request) {
 		onEarnings(w, r, app)
@@ -71,10 +76,6 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 	// Endpoint: /open-pay?traderAddr=0xabce...
 	router.Get("/open-pay", func(w http.ResponseWriter, r *http.Request) {
 		onOpenPay(w, r, app)
-	})
-
-	router.Get("/executor", func(w http.ResponseWriter, r *http.Request) {
-		onExecutor(w, r, app)
 	})
 
 	// ***-- social referral system ---***

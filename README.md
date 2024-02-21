@@ -33,30 +33,110 @@ Payments are performed automatically as scheduled by the whitelabelling partner.
 
 # Overview
 
-*Common*
-* /earnings
-* /next-pay
-* /open-pay <- not fixed for social system
-* /executor
-* /my-referrals
-  * code: show codes and partners
-  * social: show number of addresses for which we are in top 3 social accounts
+|      | **Endpoint**       | **Arguments** | **System** | **Description**                                                                                                                        |
+|------|--------------------|:-------------:|:----------:|----------------------------------------------------------------------------------------------------------------------------------------|
+| _1_  | /info              |      none     |    both    | which referral system is running (CodeSystem/SocialSystem)                                                                             |
+| _2_  | /earnings          |      addr     |    both    | historical earnings received, from trading fee kickback or referral                                                                    |
+| _3_  | /next-pay          |      none     |    both    | next payment date, e.g.,<br> `{"type":"next-pay","data":{"nextPaymentDueTs":1709038800,"nextPaymentDue":"2024-February-27 14:00:00"}}` |
+| _4_  | /open-pay          |   traderAddr  |    both    | current kickback in fees for the given address as a trader                                                                             |
+| _5_  | /my-referrals      |      addr     |    both    | code: show codes/partners <br> social: show #addresses for which we are in top 3 social accounts                                       |
+| _6_  | /my-code-selection |   traderAddr  |    both    | code:which code have I selected as trader? social: which twitter id is associated with my address?                                     |
+| _7_  | /code-rebate       |      code     |    both    | code:rebate based on code<br>social:provide twitter id as argument                                                                     |
+| _8_  | /refer-cut         |      addr     |    code    | how much fees can I distribute as an agency or referrer?                                                                               |
+| _9_  | /select-code       |      POST     |    code    | trader selects a referral code                                                                                                         |
+| _10_ | /refer             |      POST     |    code    | refer a partner                                                                                                                        |
+| _11_ | /upsert-code       |      POST     |    code    | update or create a code                                                                                                                |
+| _12_ | /token-info        |      none     |    code    | rebate-token information for code-referrers that are no agency                                                                         |
+| _13_ | /referral-ranking  |       n       |   social   | ranking of social accounts, ?n=10                                                                                                      |
+| _14_ | /social-verify     |      POST     |   social   | register account with WebAuth Bearer token                                                                                             |
 
-*Code Referral System Only*
-* /my-code-selection
-* /code-rebate
-* /refer-cut
-* /select-code
-* /refer
-* /upsert-code
-* /token-info  
+## 1. Get request: which referral system is running?
+/info
+```
+{"referralType":"SocialSystem","executorAddr":"0x3e..." "brokerAddr":"0x..."}
+```
+## 2. Get request: historical earnings
 
-*Social Referral System Only*
-* /global-ranking
-* /my-trader-rebate
-* /adduser (add user address and Twitter id)
+`http://127.0.0.1:8000/earnings?addr=0x5A09217F6D36E73eE5495b430e889f8c57876Ef3`
 
-## Get request: get all directly referred 'partners'
+Available for any participant. We distinguish between earnings as a kick-back
+for traders (asTrader=true), and earnings due to being a referrer/agency. 
+```
+{
+  "type": "earnings",
+  "data": [
+    {
+      "poolId": 1,
+      "code": "DEFAULT",
+      "earnings": 84.5672473711144,
+      "asTrader": false,
+      "tokenName": "MATIC"
+    },
+    {
+      "poolId": 2,
+      "code": "DEFAULT",
+      "earnings": 94.731112,
+      "asTrader": false,
+      "tokenName": "USDC"
+    },
+    {
+      "poolId": 2,
+      "code": "DEFAULT",
+      "earnings": 0.603999,
+      "asTrader": true,
+      "tokenName": "USDC"
+    }
+  ]
+}
+```
+
+## 3. Get request: next payment date
+
+`http://127.0.0.1:8000/next-pay`
+
+```
+{
+  "type": "next-pay",
+  "data": {
+    "nextPaymentDueTs":1697544000,
+    "nextPaymentDue":"2023-October-17 14:00:00"
+    }
+}
+```
+## 4. Get request: open payments for traders
+
+http://127.0.0.1:8000/open-pay?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
+
+```
+{
+  "type": "open-pay",
+  "data": {
+    "code": "THUANBX",
+    "openEarnings": [
+      {
+        "poolId": 1,
+        "earnings": 1.85133222663926,
+        "tokenName": "MATIC"
+      },
+      {
+        "poolId": 2,
+        "earnings": 1.04185970407959,
+        "tokenName": "USDC"
+      }
+    ]
+  }
+}
+```
+
+Code 'social' for social referral system: `{"type":"open-pay","data":{"code":"social","openEarnings":[]}}`
+
+Error:
+```
+{"error":"Incorrect 'addr' parameter"}
+```
+
+
+## 5. Get request: get all directly referred 'partners'
 Who are my partners/codes that I assigned as an agency/referrer
 and how much from my percentage cut do I pass on?
 
@@ -120,7 +200,19 @@ No codes or agency referrals in the chain:
 }
 ```
 
-## Get request: percent fee rebate when trading with a code
+## 6. Get request: code selection of a trader
+
+http://127.0.0.1:8000/my-code-selection?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
+
+a code selected:
+`{"type":"my-code-selection","data":"THUANBX"}`
+
+no code:
+`{"type":"my-code-selection","data":""}`
+
+
+
+## 7. Get request: percent fee rebate when trading with a code
 What is the rebate I get as a trader per fees paid?
 
 http://127.0.0.1:8000/code-rebate?code=DOUBLE_AG
@@ -131,7 +223,7 @@ Response:
 The rebate is in percent, that is, 0.01 corresponds to 0.01% of the broker-fees
 that will be rebated to traders that use this code
 
-## Get request: percent fee passed-on to agency or referrer
+## 8. Get request: percent fee passed-on to agency or referrer
 How much fees can I distribute as an agency or referrer?
 
 http://127.0.0.1:8000/refer-cut?addr=0x0ab6527027ecff1144dec3d78154fce309ac838c
@@ -156,104 +248,8 @@ this agency will receive 450 MATIC*25.1% and can pass on a share of it downstrea
 What the agency actually earns then depends on how much is passed on downstream and
 how much volume will be generated by the different codes downstream. 
 
-## Get request: historical earnings
 
-`http://127.0.0.1:8000/earnings?addr=0x5A09217F6D36E73eE5495b430e889f8c57876Ef3`
-
-Available for any participant. We distinguish between earnings as a kick-back
-for traders (asTrader=true), and earnings due to being a referrer/agency. 
-```
-{
-  "type": "earnings",
-  "data": [
-    {
-      "poolId": 1,
-      "code": "DEFAULT",
-      "earnings": 84.5672473711144,
-      "asTrader": false,
-      "tokenName": "MATIC"
-    },
-    {
-      "poolId": 2,
-      "code": "DEFAULT",
-      "earnings": 94.731112,
-      "asTrader": false,
-      "tokenName": "USDC"
-    },
-    {
-      "poolId": 2,
-      "code": "DEFAULT",
-      "earnings": 0.603999,
-      "asTrader": true,
-      "tokenName": "USDC"
-    }
-  ]
-}
-```
-## Get request: open payments for traders
-
-http://127.0.0.1:8000/open-pay?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
-
-```
-{
-  "type": "open-pay",
-  "data": {
-    "code": "THUANBX",
-    "openEarnings": [
-      {
-        "poolId": 1,
-        "earnings": 1.85133222663926,
-        "tokenName": "MATIC"
-      },
-      {
-        "poolId": 2,
-        "earnings": 1.04185970407959,
-        "tokenName": "USDC"
-      }
-    ]
-  }
-}
-```
-Error:
-```
-{"error":"Incorrect 'addr' parameter"}
-```
-
-
-## Get request: next payment date
-
-`http://127.0.0.1:8000/next-pay`
-
-```
-{
-  "type": "next-pay",
-  "data": {
-    "nextPaymentDueTs":1697544000,
-    "nextPaymentDue":"2023-October-17 14:00:00"
-    }
-}
-```
-
-## Get request: code selection of a trader
-
-http://127.0.0.1:8000/my-code-selection?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
-
-a code selected:
-`{"type":"my-code-selection","data":"THUANBX"}`
-
-no code:
-`{"type":"my-code-selection","data":""}`
-
-## Get request: broker and executor address
-http://127.0.0.1:8000/executor
-```
-{
-  "executorAddress":"0x3ef256282e578c5D97a7231C3C046F19b1E50855",
-  "brokerAddress":"0xb4111Fe4659057B01B28c3ff9Eb1349Fbf105e67"
-}
-```
-
-## Post: Select a referral code as a trader
+## 9. Post: Select a referral code as a trader
 
 http://127.0.0.1:8000/select-code
 
@@ -296,26 +292,53 @@ rc.signature = = await codeSigner.getSignatureForCodeSelection(rc);
 ```
 </details>
 
-## Get: rebates for referrers that are not an agency
 
-http://127.0.0.1:8000/token-info
+## 10. Post: Refer
+/refer
+passOnPercTDF is two-digit format, for example, 2.5% is sent as 250, 65% as 6500
 
 ```
-{"type":"token-info",
- "data":
- {"tokenAddr":"0xe05b86c761c70beab72fbfe919e5260e956cab99",
-  "rebates":[
-    {"cutPerc":0.2,"holding":0},
-    {"cutPerc":1.5,"holding":100},
-    {"cutPerc":2.5,"holding":1000},
-    {"cutPerc":3.75,"holding":10000}
-  ]
- }
+{
+    "parentAddr": "0x5A09217F6D36E73eE5495b430e889f8c57876Ef3",
+    "referToAddr": "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
+    "passOnPercTDF": 225,
+    "createdOn": 1696166434,
+    "signature": "0x09bbe815eba739e28c665c6637e7e45dca03eed00d0eaffb1890713c8b3f9e760d41102d5d6885724bd53c7fc0bedcce8dfebe020464c234c1c1d4d194090f071c"
 }
 ```
+Success:
+```
+{
+    "type": "referral-code",
+    "data": {
+        "referToAddr": "0x863ad9ce46acf07fd9390147b619893461036194"
+    }
+}
+```
+Error:
+only one occurrence as child allowed:
+`{"error":"referral failed:Refer to addr already in use"}`
+`{"error":"referral failed:Not an agency"}`
+
+<details>
+
+<summary>Node SDK (>=0.9.7) </summary>
+
+```
+let rp: APIReferPayload = {
+      parentAddr: wallet.address,
+      referToAddr: "0x863ad9ce46acf07fd9390147b619893461036194",
+      passOnPercTDF: 225,
+      createdOn: 1696166434,
+      signature: "",
+    };
+codeSigner = new ReferralCodeSigner(pk, wallet.address, RPC);
+rp.signature= await codeSigner.getSignatureForNewReferral(rp);
+```
+</details>
 
 
-## Post: Update or create a code (anyone can be referrer)
+## 11. Post: Update or create a code (anyone can be referrer)
 
 http://127.0.0.1:8000/upsert-code
 
@@ -360,50 +383,46 @@ rcp.signature = await codeSigner.getSignatureForNewCode(rcp);
 ```
 </details>
 
-## Post: Refer
-/refer
-passOnPercTDF is two-digit format, for example, 2.5% is sent as 250, 65% as 6500
+## 12. Get: information about the token for which there is a trading rebate
+
+Rebates for referrers that are not an agency
+http://127.0.0.1:8000/token-info
 
 ```
-{
-    "parentAddr": "0x5A09217F6D36E73eE5495b430e889f8c57876Ef3",
-    "referToAddr": "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
-    "passOnPercTDF": 225,
-    "createdOn": 1696166434,
-    "signature": "0x09bbe815eba739e28c665c6637e7e45dca03eed00d0eaffb1890713c8b3f9e760d41102d5d6885724bd53c7fc0bedcce8dfebe020464c234c1c1d4d194090f071c"
+{"type":"token-info",
+ "data":
+ {"tokenAddr":"0xe05b86c761c70beab72fbfe919e5260e956cab99",
+  "rebates":[
+    {"cutPerc":0.2,"holding":0},
+    {"cutPerc":1.5,"holding":100},
+    {"cutPerc":2.5,"holding":1000},
+    {"cutPerc":3.75,"holding":10000}
+  ]
+ }
 }
 ```
-Success:
-```
-{
-    "type": "referral-code",
-    "data": {
-        "referToAddr": "0x863ad9ce46acf07fd9390147b619893461036194"
-    }
-}
-```
-Error:
-only one occurrence as child allowed:
-`{"error":"referral failed:Refer to addr already in use"}`
-`{"error":"referral failed:Not an agency"}`
 
-<details>
-
-<summary>Node SDK (>=0.9.7) </summary>
+## 13. Get: Global Ranking of Social Accounts
 
 ```
-let rp: APIReferPayload = {
-      parentAddr: wallet.address,
-      referToAddr: "0x863ad9ce46acf07fd9390147b619893461036194",
-      passOnPercTDF: 225,
-      createdOn: 1696166434,
-      signature: "",
-    };
-codeSigner = new ReferralCodeSigner(pk, wallet.address, RPC);
-rp.signature= await codeSigner.getSignatureForNewReferral(rp);
+[{"rank":1,"score":3,"addr":"0xcf0069c032fd5e8757f18ad692cce53c2992e11f","id":"1602945858105917441"},{"rank":2,"score":3,"addr":"0x863ad9ce46acf07fd9390147b619893461036194","id":"1602625147709579264"},{"rank":3,"score":0,"addr":"0xb0cbeec370af6ca2ed541f6a2264bc95b991f6e1","id":"2358267937"}]
 ```
-</details>
 
+## 14. Post: verify JWT token
+/social-verify 
+
+Verify as described on [Web3Auth](https://web3auth.io/docs/pnp/features/server-side-verification/social-login-users):
+```
+ const req =  {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + idToken, // or token.idToken
+        },
+        body: JSON.stringify({ appPubKey: app_pub_key }),
+      }
+    const res = await fetch("http://127.0.0.1:8000/social-verify",req);
+```
 
 
 ## Dev: Contracts

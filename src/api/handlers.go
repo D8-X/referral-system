@@ -13,6 +13,33 @@ import (
 	"strings"
 )
 
+func onInfo(w http.ResponseWriter, r *http.Request, app *referral.App) {
+	refType := app.RS.GetType()
+	excAddr := app.PaymentExecutor.GetExecutorAddrHex()
+	brkrAddr := app.PaymentExecutor.GetBrokerAddr()
+	type Res struct {
+		Referral     string `json:"referralType"`
+		ExecutorAddr string `json:"executorAddr"`
+		BrokerAddr   string `json:"brokerAddr"`
+	}
+	info := Res{
+		Referral:     refType,
+		ExecutorAddr: excAddr,
+		BrokerAddr:   brkrAddr.String(),
+	}
+	jsonResponse, err := json.Marshal(info)
+	if err != nil {
+		slog.Error("onExecutor unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	w.Write(jsonResponse)
+}
+
 // onSelectCode POST request; only code referral
 func onSelectCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	if app.RS.GetType() == referral.SOCIAL_SYS_TYPE {
@@ -570,29 +597,6 @@ func onNextPay(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
 		slog.Error("onNextPay unable to marshal response" + err.Error())
-		errMsg := "Unavailable"
-		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
-		return
-	}
-	w.Write(jsonResponse)
-}
-
-// onExecutor returns payment executor and broker address, available for both
-// referral systems
-func onExecutor(w http.ResponseWriter, r *http.Request, app *referral.App) {
-	excAddr := app.PaymentExecutor.GetExecutorAddrHex()
-	brkrAddr := app.PaymentExecutor.GetBrokerAddr()
-	type Res struct {
-		ExecutorAddr string `json:"executorAddr"`
-		BrokerAddr   string `json:"brokerAddr"`
-	}
-	info := Res{
-		ExecutorAddr: excAddr,
-		BrokerAddr:   brkrAddr.String(),
-	}
-	jsonResponse, err := json.Marshal(info)
-	if err != nil {
-		slog.Error("onExecutor unable to marshal response" + err.Error())
 		errMsg := "Unavailable"
 		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
 		return

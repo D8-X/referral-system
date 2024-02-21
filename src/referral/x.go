@@ -83,11 +83,11 @@ func (rs *SocialSystem) GetUser(addrOrId string) (UserId, error) {
 	if strings.HasPrefix(addrOrId, "0x") {
 		addrOrId = strings.ToLower(addrOrId)
 		query = `SELECT addr, id FROM 
-		addr_to_id ati  
+		soc_addr_to_id ati  
 		WHERE ati.addr =$1`
 	} else {
 		query = `SELECT addr, id FROM 
-		addr_to_id ati  
+		soc_addr_to_id ati  
 		WHERE ati.id =$1`
 	}
 	var user UserId
@@ -128,7 +128,7 @@ func (rs *SocialSystem) GetMyReferrals(addrOrId string) ([]utils.APIResponseMyRe
 		if rank == 0 {
 			continue
 		}
-		ref.PassOnPerc = rs.Config.SocialCutPerc[rank-1]
+		ref.PassOnPerc = rs.Config.Social.SocialCutPerc[rank-1]
 		ref.Referral = id + "|" + addr
 		referrals = append(referrals, ref)
 	}
@@ -142,13 +142,13 @@ func (rs *SocialSystem) GetTop3Interactions(addrOrId string) ([]ScoreLeaderBoard
 	var query string
 	if strings.HasPrefix(addrOrId, "0x") {
 		addrOrId = strings.ToLower(addrOrId)
-		query = `SELECT id_interacted, addr_interacted, count, rank
-		top3_interactions
+		query = `SELECT id_interacted, addr_interacted, count, rnk
+		FROM top3_interactions
 		WHERE addr=$1
 		order by count desc`
 	} else {
-		query = `SELECT id_interacted, addr_interacted, count, rank
-		top3_interactions
+		query = `SELECT id_interacted, addr_interacted, count, rnk
+		FROM top3_interactions
 		WHERE id=$1
 		order by count desc`
 	}
@@ -172,8 +172,8 @@ func (rs *SocialSystem) GetTop3Interactions(addrOrId string) ([]ScoreLeaderBoard
 // number of likes/retweets/comments received
 func (rs *SocialSystem) GetGlobalLeaders(num int) ([]ScoreLeaderBoard, error) {
 	query := `SELECT ati.addr, ati.id, gr.interaction_count
-		FROM glbl_rank AS gr
-		JOIN addr_to_id AS ati ON ati.id = gr.id
+		FROM soc_glbl_rank AS gr
+		JOIN soc_addr_to_id AS ati ON ati.id = gr.id
 		ORDER BY gr.interaction_count DESC
 		LIMIT $1;`
 	rows, err := rs.Db.Query(query, num)
@@ -202,9 +202,9 @@ func (rs *SocialSystem) GetMyRebate(addrOrId string) (float64, error) {
 	}
 	if len(topI) == 0 {
 		//trader has no connections
-		return rs.Config.AnonTrdrCutPerc, nil
+		return rs.Config.Social.AnonTrdrCutPerc, nil
 	}
-	return rs.Config.KnownTrdrCutPerc, nil
+	return rs.Config.Social.KnownTrdrCutPerc, nil
 }
 
 // GetFeeCutsForTrader determines what percentage to send from the given trader to which participants.
@@ -224,9 +224,9 @@ func (rs *SocialSystem) GetFeeCutsForTrader(addrTrader string) ([]FeeCut, error)
 	var cut, cutDistr int
 	if len(topI) == 0 {
 		//trader has no connections
-		cut = int(rs.Config.AnonTrdrCutPerc * 100)
+		cut = int(rs.Config.Social.AnonTrdrCutPerc * 100)
 	} else {
-		cut = int(rs.Config.KnownTrdrCutPerc * 100)
+		cut = int(rs.Config.Social.KnownTrdrCutPerc * 100)
 	}
 	cutDistr += cut
 	// 1. Trader
@@ -235,7 +235,7 @@ func (rs *SocialSystem) GetFeeCutsForTrader(addrTrader string) ([]FeeCut, error)
 	cuts = append(cuts, FeeCut{})
 	// 3. top 3
 	for k, user := range topI {
-		cut = int(rs.Config.SocialCutPerc[k] * 100)
+		cut = int(rs.Config.Social.SocialCutPerc[k] * 100)
 		cuts = append(cuts, FeeCut{Addr: user.Addr, Cut2Dec: cut})
 		cutDistr += cut
 	}
@@ -248,7 +248,7 @@ func (rs *SocialSystem) GetFeeCutsForTrader(addrTrader string) ([]FeeCut, error)
 		}
 		for k := 0; k < rem; k++ {
 			j := len(topI) + k
-			cut = int(rs.Config.SocialCutPerc[j] * 100)
+			cut = int(rs.Config.Social.SocialCutPerc[j] * 100)
 			cuts = append(cuts, FeeCut{Addr: v2[k].Addr, Cut2Dec: cut})
 			cutDistr += cut
 		}

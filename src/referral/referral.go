@@ -22,7 +22,6 @@ import (
 )
 
 type App struct {
-	Db              *sql.DB
 	MarginTokenInfo []DbMarginTokenInfo
 	PaymentExecutor PayExec
 	Rpc             []string
@@ -42,6 +41,7 @@ type ReferralSystem interface {
 	GetMultiPayAddr() string
 	GetPaymentLookBackDays() int
 	SetDb(db *sql.DB)
+	GetDb() *sql.DB
 	SettingsToDb() error
 	GetType() string
 }
@@ -129,6 +129,7 @@ func (a *App) New(viper *viper.Viper) error {
 		tbearer := viper.GetString("TWITTER_AUTH_BEARER")
 		a.RS = NewSocialSystem(tbearer)
 	}
+
 	// load config
 	slog.Info("Loading configuration")
 	fileName := viper.GetString(env.CONFIG_PATH)
@@ -139,8 +140,13 @@ func (a *App) New(viper *viper.Viper) error {
 	}
 
 	// connect db
-	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
-	err = a.ConnectDB(connStr)
+	if err := a.connectDB(viper.GetString(env.DATABASE_DSN_HISTORY)); err != nil {
+		return errors.New("connecting to db:" + err.Error())
+	}
+
+	a.PaymentExecutor = &RemotePayExec{}
+	slog.Info("Init PaymentExecutor")
+	err = a.PaymentExecutor.Init(viper, a.RS.GetMultiPayAddr())
 	if err != nil {
 		return err
 	}
@@ -159,13 +165,6 @@ func (a *App) New(viper *viper.Viper) error {
 	}
 	slog.Info("Create Multipay Instance")
 	err = a.CreateMultipayInstance()
-	if err != nil {
-		return err
-	}
-
-	a.PaymentExecutor = &RemotePayExec{}
-	slog.Info("Init PaymentExecutor")
-	err = a.PaymentExecutor.Init(viper, a.RS.GetMultiPayAddr())
 	if err != nil {
 		return err
 	}
@@ -201,7 +200,7 @@ func (a *App) SettingsToDB() error {
 	INSERT INTO referral_settings (property, value)
 	VALUES ($1, $2)
 	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
-	_, err := a.Db.Exec(query, "payment_max_lookback_days", a.RS.GetPaymentLookBackDays())
+	_, err := a.RS.GetDb().Exec(query, "payment_max_lookback_days", a.RS.GetPaymentLookBackDays())
 
 	if err != nil {
 		return err
@@ -215,7 +214,7 @@ func (a *App) SettingsToDB() error {
 	INSERT INTO referral_settings (property, value)
 	VALUES ($1, $2)
 	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
-	_, err = a.Db.Exec(query, "broker_addr", addr)
+	_, err = a.RS.GetDb().Exec(query, "broker_addr", addr)
 	if err != nil {
 		return err
 	}
@@ -224,7 +223,7 @@ func (a *App) SettingsToDB() error {
 }
 
 // ConnectDB connects to the database and assigns the connection to the app struct
-func (a *App) ConnectDB(connStr string) error {
+func (a *App) connectDB(connStr string) error {
 	// Connect to database
 	// From documentation: "The returned DB is safe for concurrent use by multiple goroutines and
 	// maintains its own pool of idle connections. Thus, the Open function should be called just once.
@@ -233,18 +232,18 @@ func (a *App) ConnectDB(connStr string) error {
 	if err != nil {
 		return err
 	}
-	a.Db = db
+	a.RS.SetDb(db)
 	return nil
 }
 
 // DbGetMarginTkn sets the margin token info in the app-struct
 func (a *App) DbGetMarginTkn() error {
-	if a.Db == nil {
-		return errors.New("Db not initialized")
+	if a.RS.GetDb() == nil {
+		return errors.New("db not initialized")
 	}
 	var row DbMarginTokenInfo
 	query := "select pool_id, token_addr, token_name, token_decimals from margin_token_info;"
-	rows, err := a.Db.Query(query)
+	rows, err := a.RS.GetDb().Query(query)
 	defer rows.Close()
 	if err != nil {
 		return err
@@ -330,12 +329,12 @@ func (a *App) DBGetUnconfirmedPayTxForLastBatch() ([]string, int64) {
 					SELECT max(rp2.batch_ts) as max_ts
 					FROM referral_payment rp2 
 				)`
-	rows, err := a.Db.Query(query)
-	defer rows.Close()
+	rows, err := a.RS.GetDb().Query(query)
 	if err != nil {
 		slog.Error("Error in DBGetUnconfirmedPayTxForLastBatch:" + err.Error())
 		return []string{}, 0
 	}
+	defer rows.Close()
 	var unTxs []string
 	var unixTimestamp int64
 	for rows.Next() {
@@ -355,7 +354,7 @@ func (a *App) DBSetPayTxsConfirmed(txHash []string) {
 			SET tx_confirmed = true
 			WHERE tx_hash = $1;`
 	for _, h := range txHash {
-		_, err := a.Db.Exec(query, h)
+		_, err := a.RS.GetDb().Exec(query, h)
 		if err != nil {
 			slog.Error("Failed to set tx confirmed for tx=" + h + " error: " + err.Error())
 		} else {
@@ -399,11 +398,11 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 				tx_hash, block_ts
 				from referral_payment rp 
 			where tx_confirmed = false;`
-	rows, err := a.Db.Query(query)
-	defer rows.Close()
+	rows, err := a.RS.GetDb().Query(query)
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	var row DbPayment
 	var idx = 0
 	for rows.Next() {
@@ -423,7 +422,7 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 		query = `INSERT INTO referral_failed_payment
 			(trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, ts)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-		_, err := a.Db.Exec(query, row.TraderAddr, row.PayeeAddr, row.Code, row.Level, row.PoolId, row.BatchTs, row.PaidAmountCC,
+		_, err := a.RS.GetDb().Exec(query, row.TraderAddr, row.PayeeAddr, row.Code, row.Level, row.PoolId, row.BatchTs, row.PaidAmountCC,
 			row.TxHash, row.BlockTs)
 		idx++
 		if err != nil {
@@ -431,7 +430,7 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 		}
 		query = `DELETE FROM referral_payment rp
 			where tx_hash=$1`
-		_, err = a.Db.Query(query, row.TxHash)
+		_, err = a.RS.GetDb().Query(query, row.TxHash)
 		if err != nil {
 			slog.Error("Could not delete unconfirmed payments:" + err.Error())
 		}
@@ -452,7 +451,7 @@ func (a *App) DbWriteTx(traderAddr string, code string, amounts []*big.Int, paye
 			// we don't write 0 amounts to the database
 			continue
 		}
-		_, err := a.Db.Exec(query, traderAddr, payees[k].String(), code, k, poolId, ts, amounts[k].String(), tx)
+		_, err := a.RS.GetDb().Exec(query, traderAddr, payees[k].String(), code, k, poolId, ts, amounts[k].String(), tx)
 		if err != nil {
 			slog.Error("Could not insert tx to db for trader " + traderAddr + ": " + err.Error())
 		}
@@ -463,8 +462,8 @@ func (a *App) DbWriteTx(traderAddr string, code string, amounts []*big.Int, paye
 // if there is already an entry for a given record which is not confirmed, it sets the confirmed flag to true
 // db keys are trader_addr, payee_addr, pool_id and batch_ts
 func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, payIdx int) error {
-	if a.Db == nil {
-		return errors.New("Db not initialized")
+	if a.RS.GetDb() == nil {
+		return errors.New("db not initialized")
 	}
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
@@ -475,12 +474,12 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 				AND pool_id=$4
 				AND level=$5`
 	var isConfirmed bool
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed)
+	err := a.RS.GetDb().QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment (trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, block_nr, block_ts, tx_confirmed)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, p.Code, payIdx, p.PoolId, utcBatchTime, p.AmountDecN[payIdx].String(), p.TxHash, p.BlockNumber, utcBlockTime, true)
+		_, err := a.RS.GetDb().Exec(query, traderAddr, payeeAddr, p.Code, payIdx, p.PoolId, utcBatchTime, p.AmountDecN[payIdx].String(), p.TxHash, p.BlockNumber, utcBlockTime, true)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
@@ -494,7 +493,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 					AND lower(payee_addr) = lower($2) 
 					AND batch_ts = $3
 					AND level = $4`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime)
+		_, err := a.RS.GetDb().Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
@@ -519,12 +518,12 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 			where LOWER(payee_addr)=$1
 				and rp.tx_confirmed = TRUE
 			group by as_trader, rp.payee_addr, rp.pool_id, rp.code, mti.token_name;`
-	rows, err := a.Db.Query(query, addr)
-	defer rows.Close()
+	rows, err := a.RS.GetDb().Query(query, addr)
 	if err != nil {
 		slog.Error("Error for historic earnings" + err.Error())
-		return []utils.APIResponseHistEarnings{}, errors.New("Unable to retreive earnings")
+		return []utils.APIResponseHistEarnings{}, errors.New("unable to retreive earnings")
 	}
+	defer rows.Close()
 	var el utils.APIResponseHistEarnings
 	for rows.Next() {
 		rows.Scan(&el.PoolId, &el.AsTrader, &el.Code, &el.Earnings, &el.TokenName)
@@ -542,7 +541,7 @@ func (a *App) DbSetPaymentExecFinished(batchTs string, hasFinished bool) error {
 	VALUES ($1, $2),
 		   ($3, $4)
 	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
-	_, err := a.Db.Exec(query, "batch_timestamp", batchTs, "batch_finished", hasFinishedStr)
+	_, err := a.RS.GetDb().Exec(query, "batch_timestamp", batchTs, "batch_finished", hasFinishedStr)
 	if err != nil {
 		slog.Error("DbSetPaymentExecFinished:" + err.Error())
 		return err
@@ -554,7 +553,7 @@ func (a *App) DbGetPaymentExecHasFinished() (bool, error) {
 	query := `SELECT value FROM referral_settings rs
 			WHERE rs.property='batch_finished'`
 	var hasFinished string
-	err := a.Db.QueryRow(query).Scan(&hasFinished)
+	err := a.RS.GetDb().QueryRow(query).Scan(&hasFinished)
 	if err == sql.ErrNoRows {
 		return true, nil
 	}

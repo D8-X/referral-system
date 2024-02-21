@@ -31,10 +31,14 @@ type SocialSysConf struct {
 	PaymentMaxLookBackDays int            `json:"paymentMaxLookBackDays"`
 	PayCronSchedule        string         `json:"paymentScheduleCron"`
 	MultiPayContractAddr   string         `json:"multiPayContractAddr"`
-	SocialCutPerc          []float64      `json:"socialCutPerc"`
-	AnonTrdrCutPerc        float64        `json:"anonTraderCutPerc"`
-	KnownTrdrCutPerc       float64        `json:"knownTraderCutPerc"`
+	Social                 SocialSubConf  `json:"social"`
 	BrokerPayoutAddr       common.Address `json:"brokerPayoutAddr"`
+}
+
+type SocialSubConf struct {
+	SocialCutPerc    []float64 `json:"socialCutPerc"`
+	AnonTrdrCutPerc  float64   `json:"anonTraderCutPerc"`
+	KnownTrdrCutPerc float64   `json:"knownTraderCutPerc"`
 }
 
 type XSdk struct {
@@ -59,6 +63,10 @@ func NewSocialSystem(twitterAuthBearer string) *SocialSystem {
 
 func (rs *SocialSystem) SetDb(db *sql.DB) {
 	rs.Db = db
+}
+
+func (rs *SocialSystem) GetDb() *sql.DB {
+	return rs.Db
 }
 
 func (rs *SocialSystem) SetBrokerAddr(addr string) {
@@ -86,6 +94,9 @@ func (rs *SocialSystem) LoadConfig(fileName string, chainId int) error {
 	if conf.ChainId != chainId {
 		return errors.New("No setting found for chain id " + strconv.Itoa(chainId))
 	}
+	if conf.Social.KnownTrdrCutPerc == 0 || len(conf.Social.SocialCutPerc) != 3 {
+		return errors.New("Incomplete setting (set socialCutPerc, anonTraderCutPerc, knownTraderCutPerc) for chain id " + strconv.Itoa(chainId))
+	}
 	rs.Config = conf
 	return nil
 }
@@ -112,7 +123,7 @@ func (rs *SocialSystem) SettingsToDb() error {
 // OpenPay determines how much the given trader gets paid back
 // from his trading activity
 func (rs *SocialSystem) OpenPay(rows *sql.Rows, app *App, traderAddr string) (utils.APIResponseOpenEarnings, error) {
-	var payments []utils.OpenPay
+	payments := make([]utils.OpenPay, 0)
 	var res utils.APIResponseOpenEarnings
 	res.Code = "social"
 	// trader rebate

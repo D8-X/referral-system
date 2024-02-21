@@ -46,6 +46,11 @@ func (c *CodeSystem) GetType() string {
 func (rs *CodeSystem) SetDb(db *sql.DB) {
 	rs.Db = db
 }
+
+func (rs *CodeSystem) GetDb() *sql.DB {
+	return rs.Db
+}
+
 func (rs *CodeSystem) SetBrokerAddr(addr string) {
 	rs.BrokerAddr = addr
 }
@@ -318,7 +323,7 @@ func (rs *CodeSystem) OpenPay(rows *sql.Rows, app *App, traderAddr string) (util
 			continue
 		}
 		if res.Code != el.Code {
-			chain, err := rs.DbGetReferralChainForCode(app, el.Code)
+			chain, err := rs.DbGetReferralChainForCode(el.Code)
 			if err != nil {
 				slog.Error("Error in OpenPay" + err.Error())
 				return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
@@ -354,7 +359,7 @@ func (rs *CodeSystem) ProcessPayments(app *App, rows *sql.Rows, scale map[uint32
 
 		// determine referralchain for the code
 		if _, exists := codePaths[el.Code]; !exists {
-			chain, err := rs.DbGetReferralChainForCode(app, el.Code)
+			chain, err := rs.DbGetReferralChainForCode(el.Code)
 			if err != nil {
 				slog.Error("Could not find referral chain for code " + el.Code + ": " + err.Error())
 				continue
@@ -423,7 +428,7 @@ func (rs *CodeSystem) processCodePaymentRow(app *App, row AggregatedFeesRow, cha
 
 // DbGetReferralChainForCode gets the entire chain of referrals
 // for a code, calculating what each participant earns (percent)
-func (rs *CodeSystem) DbGetReferralChainForCode(app *App, code string) ([]DbReferralChainOfChild, error) {
+func (rs *CodeSystem) DbGetReferralChainForCode(code string) ([]DbReferralChainOfChild, error) {
 	if code == env.DEFAULT_CODE {
 		res := make([]DbReferralChainOfChild, 1)
 		res[0] = DbReferralChainOfChild{
@@ -440,7 +445,7 @@ func (rs *CodeSystem) DbGetReferralChainForCode(app *App, code string) ([]DbRefe
 		FROM referral_code WHERE code = $1`
 	var refAddr string
 	var traderCut float64
-	err := app.Db.QueryRow(query, code).Scan(&refAddr, &traderCut)
+	err := rs.GetDb().QueryRow(query, code).Scan(&refAddr, &traderCut)
 	if err != nil {
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}

@@ -67,7 +67,7 @@ func (a *App) dbGetPayBatch() (bool, int64) {
 	WHERE rs.property='batch_finished'`
 
 	var hasFinishedStr string
-	err := a.Db.QueryRow(query).Scan(&hasFinishedStr)
+	err := a.RS.GetDb().QueryRow(query).Scan(&hasFinishedStr)
 	if err == sql.ErrNoRows {
 		return true, 0
 	}
@@ -75,7 +75,7 @@ func (a *App) dbGetPayBatch() (bool, int64) {
 	var ts string
 	query = `SELECT value FROM referral_settings rs
 		WHERE rs.property='batch_timestamp'`
-	err = a.Db.QueryRow(query).Scan(&ts)
+	err = a.RS.GetDb().QueryRow(query).Scan(&ts)
 	if err != nil {
 		return true, 0
 	}
@@ -100,7 +100,7 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
 				and rs.property='broker_addr'
 				group by agfpt.pool_id, mti.token_addr, mti.token_decimals`
-	rows, err := a.Db.Query(query)
+	rows, err := a.RS.GetDb().Query(query)
 	if err != nil {
 		return nil, errors.New("determineScalingFactor:" + err.Error())
 	}
@@ -154,7 +154,7 @@ func (app *App) OpenPayGeneric(traderAddr string) (utils.APIResponseOpenEarnings
 			and rs.property='broker_addr'
 			WHERE LOWER(trader_addr)=$1`
 
-	rows, err := app.Db.Query(query, traderAddr)
+	rows, err := app.RS.GetDb().Query(query, traderAddr)
 	if err != nil {
 		slog.Error("Error for open pay" + err.Error())
 		return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
@@ -206,7 +206,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 				join referral_settings rs
 				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
 				and rs.property='broker_addr'`
-	rows, err := a.Db.Query(query)
+	rows, err := a.RS.GetDb().Query(query)
 	if err != nil {
 		slog.Error("Error for process pay" + err.Error())
 		return err

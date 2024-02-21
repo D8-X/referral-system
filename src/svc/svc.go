@@ -43,20 +43,11 @@ func Run() {
 	s := v.GetString(env.REMOTE_BROKER_HTTP)
 	slog.Info("remote broker", "url", s)
 
-	// connect db before running migrations
-	err = app.New(v)
+	// connect db before and run migrations
+	err = app.New(v, runMigrations)
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
-	}
-
-	// Run migrations on startup. If migrations fail - exit.
-	if err := runMigrations(v.GetString(env.DATABASE_DSN_HISTORY), app.RS.GetDb()); err != nil {
-		slog.Error("running migrations", "error", err)
-		os.Exit(1)
-		return
-	} else {
-		slog.Info("migrations run completed")
 	}
 
 	if !utils.IsValidPaymentSchedule(app.RS.GetCronSchedule()) {

@@ -346,7 +346,24 @@ func (rs *CodeSystem) OpenPay(rows *sql.Rows, app *App, traderAddr string) (util
 	return res, nil
 }
 
-func (rs *CodeSystem) ProcessPayments(app *App, rows *sql.Rows, scale map[uint32]float64, batchTs string) {
+func (rs *CodeSystem) ProcessPayments(app *App, scale map[uint32]float64, batchTs string) error {
+	// query snapshot of open pay view
+	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 
+		agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
+		mti.token_addr, mti.token_decimals
+	FROM referral_aggr_fees_per_trader agfpt
+	JOIN margin_token_info mti
+	ON mti.pool_id = agfpt.pool_id
+	join referral_settings rs
+	on LOWER(rs.value) = LOWER(agfpt.broker_addr)
+	and rs.property='broker_addr'`
+	rows, err := rs.GetDb().Query(query)
+	if err != nil {
+		slog.Error("Error for process pay" + err.Error())
+		return err
+	}
+	defer rows.Close()
+
 	codePaths := make(map[string][]DbReferralChainOfChild)
 	for rows.Next() {
 		var el AggregatedFeesRow
@@ -356,7 +373,10 @@ func (rs *CodeSystem) ProcessPayments(app *App, rows *sql.Rows, scale map[uint32
 		el.BrokerFeeABDKCC = new(big.Int)
 		el.BrokerFeeABDKCC.SetString(fee, 10)
 		fmt.Println("fee=", el.BrokerFeeABDKCC)
-
+		if fee == "" {
+			fmt.Println("no fee, continuing")
+			continue
+		}
 		// determine referralchain for the code
 		if _, exists := codePaths[el.Code]; !exists {
 			chain, err := rs.DbGetReferralChainForCode(el.Code)
@@ -374,7 +394,7 @@ func (rs *CodeSystem) ProcessPayments(app *App, rows *sql.Rows, scale map[uint32
 			break
 		}
 	}
-
+	return nil
 }
 
 func (rs *CodeSystem) processCodePaymentRow(app *App, row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string, scaling float64) error {

@@ -156,7 +156,23 @@ func (rs *SocialSystem) PreProcessPayments(rpc *ethclient.Client) error {
 	return nil
 }
 
-func (rs *SocialSystem) ProcessPayments(app *App, rows *sql.Rows, scale map[uint32]float64, batchTs string) {
+func (rs *SocialSystem) ProcessPayments(app *App, scale map[uint32]float64, batchTs string) error {
+	var err error
+	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 
+		agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
+		mti.token_addr, mti.token_decimals
+	FROM referral_aggr_fees_per_trader agfpt
+	JOIN margin_token_info mti
+	ON mti.pool_id = agfpt.pool_id
+	join referral_settings rs
+	on LOWER(rs.value) = LOWER(agfpt.broker_addr)
+	and rs.property='broker_addr'`
+	var rows *sql.Rows
+	rows, err = rs.GetDb().Query(query)
+	if err != nil {
+		slog.Error("Error for process pay" + err.Error())
+		return err
+	}
 	for rows.Next() {
 		var el AggregatedFeesRow
 		var fee string
@@ -176,6 +192,7 @@ func (rs *SocialSystem) ProcessPayments(app *App, rows *sql.Rows, scale map[uint
 			break
 		}
 	}
+	return err
 }
 
 func (rs *SocialSystem) processPayment(app *App, row AggregatedFeesRow, feeCut []FeeCut, batchTs string, scaling float64) error {

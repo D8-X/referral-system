@@ -196,22 +196,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	if err != nil {
 		return errors.New("ProcessAllPayments: Failed to update token holdings " + err.Error())
 	}
-	// query snapshot of open pay view
-	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 
-					agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
-					mti.token_addr, mti.token_decimals
-				FROM referral_aggr_fees_per_trader agfpt
-				JOIN margin_token_info mti
-				ON mti.pool_id = agfpt.pool_id
-				join referral_settings rs
-				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
-				and rs.property='broker_addr'`
-	rows, err := a.RS.GetDb().Query(query)
-	if err != nil {
-		slog.Error("Error for process pay" + err.Error())
-		return err
-	}
-	defer rows.Close()
+
 	// in case we have less balance than fee earnings,
 	// fee redistribution must be scaled
 	scale, err := a.DetermineScalingFactor()
@@ -219,7 +204,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 		slog.Error("Error for process pay" + err.Error())
 		return err
 	}
-	a.RS.ProcessPayments(a, rows, scale, batchTs)
+	a.RS.ProcessPayments(a, scale, batchTs)
 	err = a.DbSetPaymentExecFinished(batchTs, true)
 	if err != nil {
 		slog.Error("Could not set payment status to finished, but finished:" + err.Error())

@@ -325,7 +325,7 @@ func (rs *CodeSystem) OpenPay(rows *sql.Rows, app *App, traderAddr string) (util
 		if res.Code != el.Code {
 			chain, err := rs.DbGetReferralChainForCode(el.Code)
 			if err != nil {
-				slog.Error("Error in OpenPay" + err.Error())
+				slog.Error("error in OpenPay" + err.Error())
 				return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
 			}
 			codeChain = chain[len(chain)-1]

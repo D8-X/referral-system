@@ -17,8 +17,6 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -32,11 +30,20 @@ var embedFS embed.FS
 var abc []byte
 
 func Run() {
-	v, err := loadEnv()
+	requiredEnvs := []string{
+		env.DATABASE_DSN_HISTORY,
+		env.CONFIG_PATH,
+		env.RPC_URL_PATH,
+		env.API_BIND_ADDR,
+		env.API_PORT,
+		env.KEYFILE_PATH,
+	}
+	v, err := utils.LoadEnv(requiredEnvs, ".env")
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
 	}
+	loadAbc()
 	pk := utils.LoadFromFile(v.GetString(env.KEYFILE_PATH)+"keyfile.txt", abc)
 	v.Set(env.BROKER_KEY, pk)
 	var app referral.App
@@ -76,35 +83,6 @@ func Run() {
 	wg.Add(1)
 	go api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT), &wg)
 	wg.Wait()
-}
-
-func loadEnv() (*viper.Viper, error) {
-	v := viper.New()
-	v.SetConfigFile(".env")
-	if err := v.ReadInConfig(); err != nil {
-		slog.Info("could not load .env file" + err.Error() + " using automatic envs")
-	}
-	loadAbc()
-	v.AutomaticEnv()
-
-	v.SetDefault(env.DATABASE_DSN_HISTORY, "postgres://postgres:postgres@localhost:5432/referral")
-	v.SetDefault(env.REFERRAL_SYS_TYPE, "CODE_REFERRAL")
-	requiredEnvs := []string{
-		env.DATABASE_DSN_HISTORY,
-		env.CONFIG_PATH,
-		env.RPC_URL_PATH,
-		env.API_BIND_ADDR,
-		env.API_PORT,
-		env.KEYFILE_PATH,
-	}
-
-	for _, e := range requiredEnvs {
-		if !v.IsSet(e) {
-			return nil, fmt.Errorf("required environment variable not set %s", e)
-		}
-	}
-
-	return v, nil
 }
 
 func runMigrations(postgresDSN string, dbInstance *sql.DB) error {

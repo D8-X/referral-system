@@ -42,16 +42,32 @@ func (rs *SocialSystem) SignUpSocialUser(twitterId, addr string) error {
 	}
 	// address does not exist yet
 	slog.Info("Address " + addr + " logged in (new address with Twitter id " + id + ")")
+
+	// add to queue to eventually build ranking
+	err = rs.AddToGraphQueue(twitterId)
+	if err != nil {
+		slog.Error("SignUpSocialUser:" + err.Error())
+		return err
+	}
+	// insert address into addr/id mapping
 	query := `INSERT INTO soc_addr_to_id (addr, id) VALUES ($1, $2)`
 	_, err = rs.Db.Exec(query, addr, twitterId)
 	if err != nil {
 		slog.Error("SignUpSocialUser:" + err.Error())
 		return err
 	}
-	// build ranking
-	return rs.UserInteractionCountToDb(twitterId)
+	return nil
 }
 
+// AddToGraphQueue adds a social-id to the queue to perform a
+// social graph
+func (rs *SocialSystem) AddToGraphQueue(id string) error {
+	query := `INSERT INTO soc_graph_queue (id) VALUES ($1)`
+	_, err := rs.Db.Exec(query, id)
+	return errors.New("could not add key " + id + " to  the social graph queue" + err.Error())
+}
+
+// TODO: revamp
 // UserInteractionCountToDb counts the user interactions for the
 // given id, and adds (id, id_interacted, count) to the database
 func (rs *SocialSystem) UserInteractionCountToDb(id string) error {
@@ -64,7 +80,7 @@ func (rs *SocialSystem) UserInteractionCountToDb(id string) error {
 	msg := fmt.Sprintf("User interaction created in %v\n", t2.Sub(t1).String())
 	slog.Info(msg)
 	ids, count := res.Ranked()
-	query := `INSERT INTO counter
+	query := `INSERT INTO soc_counter
 			  (id, id_interacted, count) VALUES ($1, $2, $3)
 			  ON CONFLICT (id, id_interacted)
 			  DO UPDATE SET count=$3`
@@ -106,11 +122,11 @@ func (rs *SocialSystem) GetMyReferrals(addrOrId string) ([]utils.APIResponseMyRe
 	if strings.HasPrefix(addrOrId, "0x") {
 		addrOrId = strings.ToLower(addrOrId)
 		query = `SELECT ti.id, ti.addr, ti.rnk FROM 
-		top3_interactions ti 
+		soc_top3_interactions ti 
 		WHERE ti.addr_interacted =$1`
 	} else {
 		query = `SELECT ti.id, ti.addr, ti.rnk FROM 
-		top3_interactions ti 
+		soc_top3_interactions ti 
 		WHERE ti.id_interacted =$1`
 	}
 	rows, err := rs.Db.Query(query, addrOrId)
@@ -143,12 +159,12 @@ func (rs *SocialSystem) GetTop3Interactions(addrOrId string) ([]ScoreLeaderBoard
 	if strings.HasPrefix(addrOrId, "0x") {
 		addrOrId = strings.ToLower(addrOrId)
 		query = `SELECT id_interacted, addr_interacted, count, rnk
-		FROM top3_interactions
+		FROM soc_top3_interactions
 		WHERE addr=$1
 		order by count desc`
 	} else {
 		query = `SELECT id_interacted, addr_interacted, count, rnk
-		FROM top3_interactions
+		FROM soc_top3_interactions
 		WHERE id=$1
 		order by count desc`
 	}
@@ -245,6 +261,9 @@ func (rs *SocialSystem) GetFeeCutsForTrader(addrTrader string) ([]FeeCut, error)
 		v2, err := rs.GetGlobalLeaders(3)
 		if err != nil {
 			return nil, err
+		}
+		if len(v2) < 3 {
+			return nil, errors.New("not enough ids")
 		}
 		for k := 0; k < rem; k++ {
 			j := len(topI) + k

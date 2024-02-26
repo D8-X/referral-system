@@ -1,4 +1,4 @@
-CREATE OR REPLACE VIEW top3_interactions AS
+CREATE OR REPLACE VIEW soc_top3_interactions AS
 SELECT ati.id, 
     ati.addr, 
     top_interactions.id_interacted, 

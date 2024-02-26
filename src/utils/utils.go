@@ -1,9 +1,13 @@
 package utils
 
 import (
+	"fmt"
+	"log/slog"
+	"referral-system/env"
 	"time"
 
 	"github.com/adhocore/gronx"
+	"github.com/spf13/viper"
 )
 
 type APICodeSelectionPayload struct {
@@ -79,4 +83,24 @@ func NextPaymentSchedule(expr string) time.Time {
 func PrevPaymentSchedule(expr string) time.Time {
 	time, _ := gronx.PrevTick(expr, true)
 	return time
+}
+
+func LoadEnv(requiredEnvs []string, fileLocation string) (*viper.Viper, error) {
+	v := viper.New()
+	v.SetConfigFile(fileLocation)
+	if err := v.ReadInConfig(); err != nil {
+		slog.Info("could not load .env file" + err.Error() + " using automatic envs")
+	}
+
+	v.AutomaticEnv()
+
+	v.SetDefault(env.REFERRAL_SYS_TYPE, "CODE_REFERRAL")
+
+	for _, e := range requiredEnvs {
+		if !v.IsSet(e) {
+			return nil, fmt.Errorf("required environment variable not set %s", e)
+		}
+	}
+
+	return v, nil
 }

@@ -19,6 +19,9 @@ API_BIND_ADDR=127.0.0.1
 REMOTE_BROKER_HTTP="https://broker.zkdev.d8x.xyz/"
 # Type of referral system: code (CODE_REFERRAL), or social (some other value)
 REFERRAL_SYS_TYPE=CODE_REFERRAL
+#REFERRAL_SYS_TYPE=SOCIAL_REFERRAL
+# Set if social referral
+# TWITTER_AUTH_BEARER=
 
 # folder with keyfile.txt
 KEYFILE_PATH="./config/"

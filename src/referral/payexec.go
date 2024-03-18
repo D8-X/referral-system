@@ -197,6 +197,9 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary, rpc
 		return "", errors.New("error creating wallet:" + err.Error())
 	}
 	_, sg, err := d8x_futures.RawCreatePaymentBrokerSignature(&paydata, execWallet)
+	if err != nil {
+		return "", errors.New("error creating signature:" + err.Error())
+	}
 	slog.Info("Querying broker signature...")
 	slog.Info("Token    = " + paydata.Token.String())
 	slog.Info("Broker   = " + paydata.Payer.String())
@@ -246,11 +249,11 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary, rpc
 	}
 	if resp.StatusCode != http.StatusOK {
 		slog.Error("Error: Non-200 status code received, " + responseData.Error)
-		return "", errors.New("Error: Non-200 status code received")
+		return "", errors.New("error: Non-200 status code received")
 	}
 
 	if responseData.Error != "" {
-		slog.Error("Error response:" + responseData.Error)
+		slog.Error("error response:" + responseData.Error)
 		return "", errors.New(responseData.Error)
 	}
 	return responseData.BrokerSignature, nil
@@ -272,7 +275,7 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 		return "", err
 	}
 	if auth.From.String() != payment.Executor.String() {
-		return "", errors.New("Payment executor must transaction sender")
+		return "", errors.New("payment executor must transaction sender")
 	}
 	mpay, err := contracts.NewMultiPay(common.HexToAddress(exc.MultipayCtrctAddr), exc.Client)
 	if err != nil {

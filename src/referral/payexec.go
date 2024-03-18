@@ -133,6 +133,7 @@ func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []com
 	for k := 0; k < len(payees); k++ {
 		slog.Info(" -- Payee " + payees[k].String())
 		slog.Info("    Amount (decN)" + amounts[k].String())
+		slog.Info("    Token addr" + tokenAddr.Hex())
 	}
 }
 
@@ -173,7 +174,7 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 	}
 	if payment.Payer.String() != signer.String() {
 		slog.Error("Payment payer " + payment.Payer.String() + "not equal to signer " + signer.String())
-		return "", errors.New("Payer address must be signer address")
+		return "", errors.New("payer address must be signer address")
 	}
 	slog.Info("Signature ok")
 	txHash, err := exc.Pay(payment, sig, amounts, payees, msg)

@@ -133,6 +133,7 @@ func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []com
 	for k := 0; k < len(payees); k++ {
 		slog.Info(" -- Payee " + payees[k].String())
 		slog.Info("    Amount (decN)" + amounts[k].String())
+		slog.Info("    Token addr" + tokenAddr.Hex())
 	}
 }
 
@@ -173,7 +174,7 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 	}
 	if payment.Payer.String() != signer.String() {
 		slog.Error("Payment payer " + payment.Payer.String() + "not equal to signer " + signer.String())
-		return "", errors.New("Payer address must be signer address")
+		return "", errors.New("payer address must be signer address")
 	}
 	slog.Info("Signature ok")
 	txHash, err := exc.Pay(payment, sig, amounts, payees, msg)
@@ -196,6 +197,9 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary, rpc
 		return "", errors.New("error creating wallet:" + err.Error())
 	}
 	_, sg, err := d8x_futures.RawCreatePaymentBrokerSignature(&paydata, execWallet)
+	if err != nil {
+		return "", errors.New("error creating signature:" + err.Error())
+	}
 	slog.Info("Querying broker signature...")
 	slog.Info("Token    = " + paydata.Token.String())
 	slog.Info("Broker   = " + paydata.Payer.String())
@@ -233,7 +237,7 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary, rpc
 		slog.Error("Error reading response body:" + err.Error())
 		return "", err
 	}
-	slog.Info("Remote broker response obtained.")
+	slog.Info("Remote broker response obtained from " + exc.RemoteBrkrUrl)
 	type Response struct {
 		BrokerSignature string `json:"brokerSignature"`
 		Error           string `json:"error"`
@@ -245,11 +249,11 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary, rpc
 	}
 	if resp.StatusCode != http.StatusOK {
 		slog.Error("Error: Non-200 status code received, " + responseData.Error)
-		return "", errors.New("Error: Non-200 status code received")
+		return "", errors.New("error: Non-200 status code received")
 	}
 
 	if responseData.Error != "" {
-		slog.Error("Error response:" + responseData.Error)
+		slog.Error("error response:" + responseData.Error)
 		return "", errors.New(responseData.Error)
 	}
 	return responseData.BrokerSignature, nil
@@ -271,7 +275,7 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 		return "", err
 	}
 	if auth.From.String() != payment.Executor.String() {
-		return "", errors.New("Payment executor must transaction sender")
+		return "", errors.New("payment executor must transaction sender")
 	}
 	mpay, err := contracts.NewMultiPay(common.HexToAddress(exc.MultipayCtrctAddr), exc.Client)
 	if err != nil {

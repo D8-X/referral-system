@@ -33,6 +33,11 @@ func RegisterRoutes(router chi.Router, app *referral.App) {
 		onEarnings(w, r, app)
 	})
 
+	// Endpoint: /settings
+	router.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
+		onSettings(w, app)
+	})
+
 	// Endpoint: /refer-cut
 	router.Get("/refer-cut", func(w http.ResponseWriter, r *http.Request) {
 		onReferCut(w, r, app)

@@ -262,6 +262,21 @@ func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	w.Write([]byte(jsonResponse))
 }
 
+func onSettings(w http.ResponseWriter, app *referral.App) {
+	// Marshal the struct into JSON
+	jsonResponse, err := json.Marshal(app.Settings)
+	if err != nil {
+		slog.Error("onEarnings unable to marshal response" + err.Error())
+		errMsg := "Unavailable"
+		http.Error(w, string(formatError(errMsg)), http.StatusInternalServerError)
+		return
+	}
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+	// Write the JSON response
+	w.Write(jsonResponse)
+}
+
 func onEarnings(w http.ResponseWriter, r *http.Request, app *referral.App) {
 
 	addr := r.URL.Query().Get("addr")

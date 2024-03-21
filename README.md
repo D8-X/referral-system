@@ -269,6 +269,8 @@ http://127.0.0.1:8000/token-info
  }
 }
 ```
+## Get: settings
+http://127.0.0.1:8000/settings
 
 
 ## Post: Update or create a code (anyone can be referrer)

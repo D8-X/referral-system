@@ -128,8 +128,8 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	var logs []PaymentLog
 	var reportCount int
 	var pathLen = float64(nowBlock - startBlock)
-	// filter payments in batches of 16_384 (and decreasing) blocks to avoid RPC limit
-	deltaBlock := uint64(16_384)
+	// filter payments in batches of 32_768 (and decreasing) blocks to avoid RPC limit
+	deltaBlock := uint64(32_768)
 	for trial := 0; trial < 7; trial++ {
 		err = nil
 		if trial > 0 {

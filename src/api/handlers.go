@@ -184,7 +184,8 @@ func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
-	if strings.ToLower(addr.String()) != strings.ToLower(req.ReferrerAddr) {
+	req.ReferrerAddr = strings.ToLower(req.ReferrerAddr)
+	if strings.ToLower(addr.String()) != req.ReferrerAddr {
 		errMsg := `code selection signature wrong`
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return

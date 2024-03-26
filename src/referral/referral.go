@@ -774,7 +774,7 @@ func (a *App) UpsertCode(csp utils.APICodePayload) error {
 		return nil
 	}
 	// found, we check whether the referral addr is correct
-	if strings.ToLower(refAddr) != strings.ToLower(csp.ReferrerAddr) {
+	if strings.ToLower(refAddr) != csp.ReferrerAddr {
 		return errors.New("not code owner")
 	}
 	query = `UPDATE referral_code SET trader_rebate_perc = $1

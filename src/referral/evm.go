@@ -125,48 +125,66 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	}
 	nowBlock := header.Number.Uint64()
 
-	// filter payments in batches of 1000 blocks to avoid RPC limit
 	var logs []PaymentLog
 	var reportCount int
 	var pathLen = float64(nowBlock - startBlock)
-	for {
-		endBlock := startBlock + 1000
-		if reportCount%100 == 0 {
-			msg := fmt.Sprintf("Reading payments from onchain: %.0f%%", 100-100*float64(nowBlock-startBlock)/pathLen)
+	// filter payments in batches of 16_384 (and decreasing) blocks to avoid RPC limit
+	deltaBlock := uint64(16_384)
+	for trial := 0; trial < 7; trial++ {
+		err = nil
+		if trial > 0 {
+			msg := fmt.Sprintf("Retrying with num blocks=%d (%d/%d)...", deltaBlock, trial, 7)
 			slog.Info(msg)
+			time.Sleep(5 * time.Second)
 		}
-		// Create an event iterator for the MultiPayPayment events
-		var endBlockPtr *uint64 = &endBlock
-		if endBlock >= nowBlock {
-			endBlockPtr = nil
-		}
-		opts := &bind.FilterOpts{
-			Start:   startBlock,  // Starting block number
-			End:     endBlockPtr, // Ending block (nil for latest)
-			Context: context.Background(),
-		}
-		multiPayPaymentIterator, err := ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
-		if err != nil {
-			return logs, errors.New("Failed to create event iterator: " + err.Error())
-		}
-		// Iterate through the events and gather paymentlog:
-		/*
-			PaymentLog
-				BatchTimestamp string
-				Code           string
-				PoolId         uint32
-				TokenAddr      string
-				BrokerAddr     string
-				PayeeAddr      []string
-				AmountDecN     []string
-		*/
+		for {
+			endBlock := startBlock + deltaBlock
+			if reportCount%100 == 0 {
+				msg := fmt.Sprintf("Reading payments from onchain: %.0f%%", 100-100*float64(nowBlock-startBlock)/pathLen)
+				slog.Info(msg)
+			}
+			// Create an event iterator for the MultiPayPayment events
+			var endBlockPtr *uint64 = &endBlock
+			if endBlock >= nowBlock {
+				endBlockPtr = nil
+			}
+			opts := &bind.FilterOpts{
+				Start:   startBlock,  // Starting block number
+				End:     endBlockPtr, // Ending block (nil for latest)
+				Context: context.Background(),
+			}
+			var multiPayPaymentIterator *contracts.MultiPayPaymentIterator
+			multiPayPaymentIterator, err = ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
+			if err != nil {
+				break
+			}
+			// Iterate through the events and gather paymentlog:
+			/*
+				PaymentLog
+					BatchTimestamp string
+					Code           string
+					PoolId         uint32
+					TokenAddr      string
+					BrokerAddr     string
+					PayeeAddr      []string
+					AmountDecN     []string
+			*/
 
-		processMultiPayEvents(client, multiPayPaymentIterator, &logs)
-		if endBlock >= nowBlock {
+			processMultiPayEvents(client, multiPayPaymentIterator, &logs)
+			if endBlock >= nowBlock {
+				break
+			}
+			startBlock = endBlock + 1
+			reportCount += 1
+		}
+		if err == nil {
 			break
 		}
-		startBlock = endBlock + 1
-		reportCount += 1
+		slog.Info("Failed to create event iterator: " + err.Error())
+		deltaBlock = deltaBlock / 2
+	}
+	if err != nil {
+		return logs, err
 	}
 	slog.Info("Reading payments completed.")
 	return logs, nil

@@ -93,33 +93,39 @@ func onRefer(w http.ResponseWriter, r *http.Request, app *referral.App) {
 		}`
 		errMsg = strings.ReplaceAll(errMsg, "\t", "")
 		errMsg = strings.ReplaceAll(errMsg, "\n", "")
+		slog.Error("Refer request error wrong arguments")
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
 	if !isValidEvmAddr(req.ParentAddr) || !isValidEvmAddr(req.ReferToAddr) {
 		errMsg := `invalid address`
+		slog.Error("Refer request error invalid address")
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
 	if !isCurrentTimestamp(req.CreatedOn) {
 		errMsg := `timestamp not current`
+		slog.Error("Refer request error invalid timestamp")
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
 	if req.PassOnPercTDF >= 10000 {
 		errMsg := `pass on percentage invalid`
+		slog.Error("Refer request error invalid PassOnPercTDF")
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
 	addr, err := RecoverReferralSigAddr(req)
 	if err != nil {
-		slog.Info("Recovering referral signature failed:" + err.Error())
+		slog.Error("Recovering referral signature failed:" + err.Error())
 		errMsg := `referral signature recovery failed`
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
-	if strings.ToLower(addr.String()) != strings.ToLower(req.ParentAddr) {
+	req.ParentAddr = strings.ToLower(req.ParentAddr)
+	if strings.ToLower(addr.String()) != req.ParentAddr {
 		errMsg := `code selection signature wrong`
+		slog.Error("Refer went wrong:" + errMsg)
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
@@ -127,6 +133,7 @@ func onRefer(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	err = app.Refer(req)
 	if err != nil {
 		errMsg := `referral failed:` + err.Error()
+		slog.Error(errMsg)
 		http.Error(w, string(formatError(errMsg)), http.StatusBadRequest)
 		return
 	}
@@ -135,7 +142,7 @@ func onRefer(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	// Write the JSON response
 	jsonResponse := `{"type":"referral-code", "data":{"referToAddr": "` + req.ReferToAddr + `"}}`
 	w.Write([]byte(jsonResponse))
-
+	slog.Info("Successful referral to " + req.ReferToAddr)
 }
 
 func onUpsertCode(w http.ResponseWriter, r *http.Request, app *referral.App) {

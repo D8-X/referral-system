@@ -282,7 +282,6 @@ func (a *App) processPayments(batchTs string) error {
 		slog.Error("Error for process pay" + err.Error())
 		return err
 	}
-	var aggrFeesPerTrader []AggregatedFeesRow
 	codePaths := make(map[string][]DbReferralChainOfChild)
 	for rows.Next() {
 		var el AggregatedFeesRow
@@ -292,7 +291,6 @@ func (a *App) processPayments(batchTs string) error {
 		el.BrokerFeeABDKCC = new(big.Int)
 		el.BrokerFeeABDKCC.SetString(fee, 10)
 		fmt.Println("fee=", el.BrokerFeeABDKCC)
-		aggrFeesPerTrader = append(aggrFeesPerTrader, el)
 
 		// determine referralchain for the code
 		if _, exists := codePaths[el.Code]; !exists {

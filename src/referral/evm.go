@@ -117,6 +117,7 @@ func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) 
 
 // FilterPayments collects historical events and updates the database
 func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock, endBlock uint64) ([]PaymentLog, error) {
+	slog.Info("Reading payments from onchain...")
 	header, err := client.HeaderByNumber(context.Background(), nil)
 	if err != nil {
 		return []PaymentLog{}, errors.New("Failed to get block hgeader: " + err.Error())
@@ -159,6 +160,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		}
 		startBlock = endBlock + 1
 	}
+	slog.Info("Reading payments completed.")
 	return logs, nil
 }
 

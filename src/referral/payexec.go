@@ -93,7 +93,7 @@ func (exc *RemotePayExec) Init(viper *viper.Viper, multiPayAddr string) error {
 	exc.MultipayCtrctAddr = multiPayAddr
 	addr := viper.GetString(env.REMOTE_BROKER_HTTP)
 	if addr == "" {
-		return errors.New("No remote broker URL defined")
+		return errors.New("no remote broker URL defined")
 	}
 	addr, _ = strings.CutSuffix(addr, "/")
 	exc.RemoteBrkrUrl = addr

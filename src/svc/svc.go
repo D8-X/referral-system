@@ -68,25 +68,16 @@ func Run() {
 		slog.Error("Error: paymentScheduleCron not a valid CRON-expression")
 		return
 	}
-	nxt := utils.NextPaymentSchedule(app.Settings.PayCronSchedule)
-	slog.Info("Next payment due on " + nxt.Format("2006-January-02 15:04:05"))
-	// confirming payment transactions, if any
-	app.ConfirmPaymentTxs()
-	app.SavePayments()
 	err = app.DbGetMarginTkn()
 	if err != nil {
 		slog.Error("Error:" + err.Error())
 		return
 	}
 	var wg sync.WaitGroup
-	if hasFinished, _ := app.DbGetPaymentExecHasFinished(); !hasFinished || app.IsPaymentDue() {
-		// application crashed before payment was finalized, so restart
-		go app.ProcessAllPayments(false)
-	} else {
-		// schedule payment
-		slog.Info("Scheduling next payment")
-		app.SchedulePayment()
-	}
+
+	// execute payments if needed and schedule next payment
+	go app.ManagePayments()
+
 	wg.Add(1)
 	go api.StartApiServer(&app, v.GetString(env.API_BIND_ADDR), v.GetString(env.API_PORT), &wg)
 	wg.Wait()

@@ -48,11 +48,11 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 			and rs.property='broker_addr'
 			WHERE LOWER(trader_addr)=$1`
 	rows, err := a.Db.Query(query, traderAddr)
-	defer rows.Close()
 	if err != nil {
 		slog.Error("Error for open pay" + err.Error())
 		return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
 	}
+	defer rows.Close()
 	var payments []utils.OpenPay
 	var codeChain DbReferralChainOfChild
 	var res utils.APIResponseOpenEarnings
@@ -97,7 +97,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 func (a *App) SchedulePayment() {
 	// Define the timestamp when the task is due (replace with your timestamp)
 	dueTimestamp := utils.NextPaymentSchedule(a.Settings.PayCronSchedule)
-	durUntilDue := dueTimestamp.Sub(time.Now())
+	durUntilDue := time.Until(dueTimestamp)
 
 	go func() {
 		slog.Info("Waiting for " + durUntilDue.String() + " until next payment is due...")
@@ -105,24 +105,11 @@ func (a *App) SchedulePayment() {
 
 		// Execute
 		fmt.Println("Payment is now due, executing...")
-		err := a.ProcessAllPayments(true)
+		err := a.ManagePayments()
 		if err != nil {
 			slog.Error("Error when processing payments:" + err.Error())
 		}
 	}()
-}
-
-func (a *App) IsPaymentDue() bool {
-	hasFinished, batchTime := a.dbGetPayBatch()
-	if !hasFinished {
-		return false
-	}
-	ts := time.Unix(batchTime, 0)
-	prevTime := utils.PrevPaymentSchedule(a.Settings.PayCronSchedule)
-	slog.Info("Last payment due time: " + prevTime.Format("2006-01-02 15:04:05"))
-	slog.Info("Last payment batch execution time: " + ts.Format("2006-01-02 15:04:05"))
-
-	return prevTime.After(ts)
 }
 
 // dbGetPayBatch returns hasFinished and if yes the
@@ -166,10 +153,10 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 				and rs.property='broker_addr'
 				group by agfpt.pool_id, mti.token_addr, mti.token_decimals`
 	rows, err := a.Db.Query(query)
-	defer rows.Close()
 	if err != nil {
 		return nil, errors.New("determineScalingFactor:" + err.Error())
 	}
+	defer rows.Close()
 	scale := make(map[uint32]float64)
 	for rows.Next() {
 		var pool uint32
@@ -203,34 +190,56 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 	return scale, nil
 }
 
-// ProcessAllPayments determins how much to pay and ultimately delegates
+// ManagePayments determins how much to pay and ultimately delegates
 // payment execution to payexec
-func (a *App) ProcessAllPayments(filterPayments bool) error {
+func (a *App) ManagePayments() error {
 	// Filter blockchain events to confirm payments
-	if filterPayments {
-		a.SavePayments()
-		slog.Info("Historical payment filtering done")
-	}
+	slog.Info("Reading onchain payments ...")
+	a.SavePayments()
+	slog.Info("Reading onchain payments completed")
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
 	a.PaymentExecutor.NewTokenBucket(5, 3)
 	// determine batch timestamp
 	var batchTs string
-
+	var err error = nil
 	hasFinished, batchTime := a.dbGetPayBatch()
 	if !hasFinished {
 		// continue payment execution
 		batchTs = fmt.Sprintf("%d", batchTime)
-	} else {
+		slog.Info("Continuing aborted payments for batch " + batchTs)
+		err = a.processPayments(batchTs)
+	} else if a.isPaymentDue(batchTime) {
+
 		// register intend to start
 		// payment batch in database
 		currentTime := time.Now().Unix()
 		batchTs = fmt.Sprintf("%d", currentTime)
-		err := a.DbSetPaymentExecFinished(batchTs, false)
-		if err != nil {
-			return err
+		slog.Info("Payment is due, batch " + batchTs)
+		err = a.DbSetPaymentExecFinished(batchTs, false)
+		if err == nil {
+			err = a.processPayments(batchTs)
 		}
+	} else {
+		slog.Info("No payment due, scheduling next payment")
 	}
+	if err != nil {
+		slog.Error("Error processing payments:" + err.Error())
+	}
+	// schedule next payments
+	a.SchedulePayment()
+	return nil
+}
 
+func (a *App) isPaymentDue(batchTime int64) bool {
+	ts := time.Unix(batchTime, 0)
+	prevTime := utils.PrevPaymentSchedule(a.Settings.PayCronSchedule)
+	slog.Info("Last payment due time: " + prevTime.Format("2006-01-02 15:04:05"))
+	slog.Info("Last payment batch execution time: " + ts.Format("2006-01-02 15:04:05"))
+
+	return prevTime.After(ts)
+}
+
+func (a *App) processPayments(batchTs string) error {
 	// update token holdings
 	err := a.DbUpdateTokenHoldings()
 	if err != nil {
@@ -247,11 +256,11 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
 				and rs.property='broker_addr'`
 	rows, err := a.Db.Query(query)
-	defer rows.Close()
 	if err != nil {
 		slog.Error("Error for process pay" + err.Error())
 		return err
 	}
+	defer rows.Close()
 	// in case we have less balance than fee earnings,
 	// fee redistribution must be scaled
 	scale, err := a.DetermineScalingFactor()
@@ -282,7 +291,7 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 		}
 		// process
 		scalingFactor := scale[el.PoolId]
-		err = a.processPayment(el, codePaths[el.Code], batchTs, scalingFactor)
+		err = a.payBatch(el, codePaths[el.Code], batchTs, scalingFactor)
 		if err != nil {
 			slog.Info("aborting payments...")
 			break
@@ -298,13 +307,10 @@ func (a *App) ProcessAllPayments(filterPayments bool) error {
 	// Filter blockchain events to confirm payments
 	slog.Info("Confirming payments")
 	a.ConfirmPaymentTxs()
-
-	// schedule next payments
-	a.SchedulePayment()
 	return nil
 }
 
-func (a *App) processPayment(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string, scaling float64) error {
+func (a *App) payBatch(row AggregatedFeesRow, chain []DbReferralChainOfChild, batchTs string, scaling float64) error {
 	totalDecN := utils.ABDKToDecN(row.BrokerFeeABDKCC, row.TokenDecimals)
 	// scale
 	if scaling < 1 {

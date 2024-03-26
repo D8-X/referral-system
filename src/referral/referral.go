@@ -407,7 +407,6 @@ func (a *App) DBSetPayTxsConfirmed(txHash []string) {
 // SavePayments gets the payment events from on-chain and
 // updates or inserts database entries
 func (a *App) SavePayments() error {
-	slog.Info("Reading onchain payments and saving to DB...")
 	tsStart := time.Now().Unix() - int64(a.Settings.PaymentMaxLookBackDays*86400)
 	lookBackBlock, _, err := contracts.FindBlockWithTs(a.RpcClient, uint64(tsStart))
 	if err != nil {
@@ -429,7 +428,6 @@ func (a *App) SavePayments() error {
 		}
 
 	}
-	slog.Info("Reading onchain payments completed")
 	return nil
 }
 
@@ -984,21 +982,6 @@ func (a *App) DbSetPaymentExecFinished(batchTs string, hasFinished bool) error {
 		return err
 	}
 	return nil
-}
-
-func (a *App) DbGetPaymentExecHasFinished() (bool, error) {
-	query := `SELECT value FROM referral_settings rs
-			WHERE rs.property='batch_finished'`
-	var hasFinished string
-	err := a.Db.QueryRow(query).Scan(&hasFinished)
-	if err == sql.ErrNoRows {
-		return true, nil
-	}
-	if err != nil {
-		slog.Error("DbGetPaymentExecHasFinished:" + err.Error())
-		return true, err
-	}
-	return hasFinished == "true", nil
 }
 
 func (a *App) DbGetTokenInfo() (utils.APIResponseTokenHoldings, error) {

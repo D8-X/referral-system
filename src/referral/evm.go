@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"math/rand"
@@ -117,7 +118,7 @@ func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) 
 
 // FilterPayments collects historical events and updates the database
 func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock, endBlock uint64) ([]PaymentLog, error) {
-	slog.Info("Reading payments from onchain...")
+
 	header, err := client.HeaderByNumber(context.Background(), nil)
 	if err != nil {
 		return []PaymentLog{}, errors.New("Failed to get block hgeader: " + err.Error())
@@ -126,8 +127,14 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 
 	// filter payments in batches of 5000 blocks to avoid RPC limit
 	var logs []PaymentLog
+	var reportCount int
+	var pathLen = float64(nowBlock - startBlock)
 	for {
 		endBlock := startBlock + 5000
+		if reportCount%100 == 0 {
+			msg := fmt.Sprintf("Reading payments from onchain: %.0f%%", 100-100*float64(nowBlock-startBlock)/pathLen)
+			slog.Info(msg)
+		}
 		// Create an event iterator for the MultiPayPayment events
 		var endBlockPtr *uint64 = &endBlock
 		if endBlock >= nowBlock {
@@ -159,6 +166,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 			break
 		}
 		startBlock = endBlock + 1
+		reportCount += 1
 	}
 	slog.Info("Reading payments completed.")
 	return logs, nil

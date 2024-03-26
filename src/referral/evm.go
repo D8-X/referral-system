@@ -125,12 +125,12 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	}
 	nowBlock := header.Number.Uint64()
 
-	// filter payments in batches of 5000 blocks to avoid RPC limit
+	// filter payments in batches of 1000 blocks to avoid RPC limit
 	var logs []PaymentLog
 	var reportCount int
 	var pathLen = float64(nowBlock - startBlock)
 	for {
-		endBlock := startBlock + 5000
+		endBlock := startBlock + 1000
 		if reportCount%100 == 0 {
 			msg := fmt.Sprintf("Reading payments from onchain: %.0f%%", 100-100*float64(nowBlock-startBlock)/pathLen)
 			slog.Info(msg)

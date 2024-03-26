@@ -233,6 +233,7 @@ func (a *App) ManagePayments() error {
 func (a *App) isPaymentDue(batchTime int64) bool {
 	ts := time.Unix(batchTime, 0)
 	prevTime := utils.PrevPaymentSchedule(a.Settings.PayCronSchedule)
+	slog.Info("Cron schedule:" + a.Settings.PayCronSchedule)
 	slog.Info("Last payment due time: " + prevTime.Format("2006-01-02 15:04:05"))
 	slog.Info("Last payment batch execution time: " + ts.Format("2006-01-02 15:04:05"))
 

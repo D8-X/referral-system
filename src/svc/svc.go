@@ -68,6 +68,7 @@ func Run() {
 		slog.Error("Error: paymentScheduleCron not a valid CRON-expression")
 		return
 	}
+	fmt.Println("Payment schedule " + app.Settings.PayCronSchedule)
 	err = app.DbGetMarginTkn()
 	if err != nil {
 		slog.Error("Error:" + err.Error())

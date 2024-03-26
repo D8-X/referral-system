@@ -135,7 +135,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		if trial > 0 {
 			msg := fmt.Sprintf("Retrying with num blocks=%d (%d/%d)...", deltaBlock, trial, 7)
 			slog.Info(msg)
-			time.Sleep(5 * time.Second)
+			time.Sleep(time.Duration(10*trial) * time.Second)
 		}
 		for {
 			endBlock := startBlock + deltaBlock

@@ -105,10 +105,7 @@ func (a *App) SchedulePayment() {
 
 		// Execute
 		fmt.Println("Payment is now due, executing...")
-		err := a.ManagePayments()
-		if err != nil {
-			slog.Error("Error when processing payments:" + err.Error())
-		}
+		a.ManagePayments()
 	}()
 }
 
@@ -192,16 +189,33 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 
 // ManagePayments determins how much to pay and ultimately delegates
 // payment execution to payexec
-func (a *App) ManagePayments() error {
+func (a *App) ManagePayments() {
 	// Filter blockchain events to confirm payments
 	slog.Info("Reading onchain payments ...")
-	a.SavePayments()
+	var err error = nil
+	for trial := 0; trial < 5; trial++ {
+		if trial > 0 {
+			msg := fmt.Sprintf("Retrying, waiting for %d seconds ", 60*trial)
+			slog.Info(msg)
+			time.Sleep(time.Duration(60*trial) * time.Second)
+		}
+		err = a.SavePayments()
+		if err == nil {
+			break
+		}
+		slog.Info("Reading onchain payments failed:" + err.Error())
+	}
+	if err != nil {
+		slog.Info("Reading onchain payments failed: rescheduling payments")
+		a.SchedulePayment()
+		return
+	}
 	slog.Info("Reading onchain payments completed")
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
 	a.PaymentExecutor.NewTokenBucket(5, 3)
 	// determine batch timestamp
 	var batchTs string
-	var err error = nil
+	err = nil
 	hasFinished, batchTime := a.dbGetPayBatch()
 	if !hasFinished {
 		// continue payment execution
@@ -227,7 +241,6 @@ func (a *App) ManagePayments() error {
 	}
 	// schedule next payments
 	a.SchedulePayment()
-	return nil
 }
 
 func (a *App) isPaymentDue(batchTime int64) bool {

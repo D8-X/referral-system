@@ -27,6 +27,10 @@ func TestPaymentSchedule(t *testing.T) {
 	if !(currentTime.After(prevTime) && nxtTime.After(currentTime)) {
 		t.Errorf("unexpected order")
 	}
+	schedule = "* * * * *"
+	if IsValidPaymentSchedule(schedule) {
+		t.Errorf("IsValidPaymentSchedule(" + schedule + ") = true, expected false")
+	}
 }
 
 func TestAbdkQuo(t *testing.T) {

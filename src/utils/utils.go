@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/adhocore/gronx"
@@ -67,6 +68,10 @@ type APIResponse struct {
 }
 
 func IsValidPaymentSchedule(expr string) bool {
+	hasNumber := regexp.MustCompile(`([0-9])`).MatchString(expr)
+	if !hasNumber {
+		return false
+	}
 	gron := gronx.New()
 	return gron.IsValid(expr)
 }

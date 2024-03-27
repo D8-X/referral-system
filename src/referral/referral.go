@@ -898,7 +898,7 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 			FROM referral_payment rp
 			JOIN margin_token_info mti
 				on mti.pool_id = rp.pool_id
-			where LOWER(payee_addr)=$1
+			where LOWER(payee_addr)=LOWER($1)
 				and rp.tx_confirmed = TRUE
 			group by as_trader, rp.payee_addr, rp.pool_id, rp.code, mti.token_name;`
 	rows, err := a.Db.Query(query, addr)

@@ -34,7 +34,7 @@ type PayExec interface {
 	// assign private key and remote broker address
 	Init(viper *viper.Viper, multiPayAddr string) error
 	GetBrokerAddr() common.Address
-	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg, code string, rpc *ethclient.Client) (string, error)
+	TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg, code string, rpc *ethclient.Client) (common.Hash, error)
 	GetExecutorAddrHex() string
 	SetClient(client *ethclient.Client)
 	NewTokenBucket(tokens int, refillRate float64)
@@ -142,10 +142,18 @@ func (exc *RemotePayExec) GetExecutorAddrHex() string {
 	return execAddr
 }
 
-func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.Int, amounts []*big.Int, payees []common.Address, id int64, msg, code string, rpc *ethclient.Client) (string, error) {
+func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address,
+	total *big.Int,
+	amounts []*big.Int,
+	payees []common.Address,
+	id int64,
+	msg,
+	code string,
+	rpc *ethclient.Client) (common.Hash, error) {
+
 	logPaymentIntent(tokenAddr, amounts, payees, id, msg, code)
 	if len(amounts) != len(payees) {
-		return "", errors.New("#amounts must be equal to #payees")
+		return common.Hash{}, errors.New("#amounts must be equal to #payees")
 	}
 	// get signature
 	ts := time.Now().Unix()
@@ -163,26 +171,26 @@ func (exc *RemotePayExec) TransactPayment(tokenAddr common.Address, total *big.I
 
 	sig, err := exc.remoteGetSignature(payment, rpc)
 	if err != nil {
-		return "", err
+		return common.Hash{}, err
 	}
 	slog.Info("Got signature for payment execution:" + sig)
 	// check signature address
 	sigTrim := strings.TrimPrefix(sig, "0x")
 	signer, err := d8x_futures.RecoverPaymentSignatureAddr(common.Hex2Bytes(sigTrim[:]), &payment)
 	if err != nil {
-		return "", errors.New("Could not recover signature " + err.Error())
+		return common.Hash{}, errors.New("Could not recover signature " + err.Error())
 	}
 	if payment.Payer.String() != signer.String() {
 		slog.Error("Payment payer " + payment.Payer.String() + "not equal to signer " + signer.String())
-		return "", errors.New("payer address must be signer address")
+		return common.Hash{}, errors.New("payer address must be signer address")
 	}
 	slog.Info("Signature ok")
 	txHash, err := exc.Pay(payment, sig, amounts, payees, msg)
 	if err != nil {
 		slog.Error("Unable to pay:" + err.Error())
-		return "", err
+		return common.Hash{}, err
 	}
-	slog.Info("Payment submitted tx hash = " + txHash)
+	slog.Info("Payment submitted tx hash = " + txHash.Hex())
 	return txHash, nil
 }
 
@@ -259,27 +267,28 @@ func (exc *RemotePayExec) remoteGetSignature(paydata d8x_futures.PaySummary, rpc
 	return responseData.BrokerSignature, nil
 }
 
-func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amounts []*big.Int, payees []common.Address, msg string) (string, error) {
+func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amounts []*big.Int, payees []common.Address, msg string) (common.Hash, error) {
 	// check pre-condition
 	t := new(big.Int).Set(amounts[0])
 	for i := 1; i < len(amounts); i++ {
 		t.Add(t, amounts[i])
 	}
 	if t.String() != payment.TotalAmount.String() {
-		return "", errors.New("total amount must be sum of amounts")
+		return common.Hash{}, errors.New("total amount must be sum of amounts")
 	}
 	exc.waitForToken("auth")
 	auth, err := exc.CreateAuth()
 	if err != nil {
 		slog.Error("Pay: Could not create auth: " + err.Error())
-		return "", err
+		return common.Hash{}, err
 	}
 	if auth.From.String() != payment.Executor.String() {
-		return "", errors.New("payment executor must transaction sender")
+		return common.Hash{}, errors.New("payment executor must transaction sender")
 	}
+	exc.waitForToken("auth")
 	mpay, err := contracts.NewMultiPay(common.HexToAddress(exc.MultipayCtrctAddr), exc.Client)
 	if err != nil {
-		return "", errors.New("Failed to instantiate Proxy contract: " + err.Error())
+		return common.Hash{}, errors.New("Failed to instantiate Proxy contract: " + err.Error())
 	}
 
 	var s = contracts.MultiPayPaySummary{
@@ -296,9 +305,9 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	tx, err := mpay.DelegatedPay(auth, s, common.Hex2Bytes(sigTrim), amounts, payees, msg)
 
 	if err != nil {
-		return "", err
+		return common.Hash{}, err
 	}
-	return tx.Hash().Hex(), nil
+	return tx.Hash(), nil
 }
 
 func (exc *RemotePayExec) waitForToken(topic string) {

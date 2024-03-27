@@ -234,7 +234,10 @@ func (a *App) SettingsToDB() error {
 	if err != nil {
 		return err
 	}
-
+	err = a.DbCleanBrokerChain(addr)
+	if err != nil {
+		return err
+	}
 	// referral cut based on token holdings
 	dec := a.Settings.TokenX.Decimals
 	tkn := a.Settings.TokenX.Address
@@ -488,22 +491,22 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 func (a *App) DbGetReferralChainFromChild(child string, holdings *big.Int) ([]DbReferralChainOfChild, bool, error) {
 	child = strings.ToLower(child)
 	var chain []DbReferralChainOfChild
-	isAg := a.IsAgency(child)
+	isAg, _ := a.IsAgency(child)
 	if isAg {
 		var row DbReferralChainOfChild
-		query := "WITH RECURSIVE child_to_root AS (" +
-			"SELECT child, parent, pass_on, 1 AS lvl " +
-			"FROM referral_chain " +
-			"WHERE lower(child) = '" + child + "' " +
-			"UNION ALL " +
-			"SELECT c.child, c.parent, c.pass_on, cr.lvl + 1 " +
-			"FROM referral_chain c " +
-			"INNER JOIN child_to_root cr ON lower(cr.parent) = lower(c.child)" +
-			") " +
-			"SELECT parent, child, pass_on, lvl " +
-			"FROM child_to_root " +
-			"ORDER BY -lvl;"
-		rows, err := a.Db.Query(query)
+		query := `WITH RECURSIVE child_to_root AS ( 
+			SELECT child, parent, pass_on, 1 AS lvl 
+			FROM referral_chain 
+			WHERE lower(child) = $1 
+			UNION ALL
+			SELECT c.child, c.parent, c.pass_on, cr.lvl + 1
+			FROM referral_chain c
+			INNER JOIN child_to_root cr ON lower(cr.parent) = lower(c.child)
+			)
+			SELECT parent, child, pass_on, lvl
+			FROM child_to_root
+			ORDER BY -lvl;`
+		rows, err := a.Db.Query(query, child)
 		if err != nil {
 			return []DbReferralChainOfChild{}, isAg, err
 		}
@@ -591,12 +594,16 @@ func (a *App) CutPercentageCode(code string) (float64, error) {
 
 // IsAgency returns true if the address is either the broker,
 // or a child in the referral chain (hence an agency)
-func (a *App) IsAgency(addr string) bool {
-	query := `SELECT LOWER(child) from referral_chain WHERE LOWER(child)=$1
-		UNION SELECT value as child from referral_settings WHERE property='broker_addr' AND LOWER(value)=$1`
+// The second parameter is true if it is the broker
+func (a *App) IsAgency(addr string) (bool, bool) {
+	query := `SELECT LOWER(child), false as is_broker
+		from referral_chain WHERE LOWER(child)=$1
+		UNION SELECT value as child, true as is_broker
+		from referral_settings WHERE property='broker_addr' AND LOWER(value)=$1`
 	var dbAddr string
-	err := a.Db.QueryRow(query, addr).Scan(&dbAddr)
-	return err != sql.ErrNoRows
+	var isBroker bool
+	err := a.Db.QueryRow(query, addr).Scan(&dbAddr, &isBroker)
+	return err != sql.ErrNoRows, isBroker
 }
 
 // dbWriteTx write info about the payment transaction into referral_payment
@@ -791,14 +798,14 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 	var passOn float32 = float32(rpl.PassOnPercTDF) / 100.0
 	rpl.ParentAddr = strings.ToLower(rpl.ParentAddr)
 	// parent can only refer if they are the broker or a child
-	if !a.IsAgency(rpl.ParentAddr) {
+	if isAg, _ := a.IsAgency(rpl.ParentAddr); !isAg {
 		return errors.New("not an agency")
 	}
 	rpl.ReferToAddr = strings.ToLower(rpl.ReferToAddr)
 	h, err := a.HasLoopOnChainAddition(rpl.ParentAddr, rpl.ReferToAddr)
 	if err != nil {
 		slog.Error("HasLoopOnChainAddition failed")
-		return errors.New("Failed")
+		return errors.New("failed")
 	}
 	if h {
 		return errors.New("referral already in chain")
@@ -807,7 +814,7 @@ func (a *App) Refer(rpl utils.APIReferPayload) error {
 	var addr string
 	err = a.Db.QueryRow(query, rpl.ReferToAddr).Scan(&addr)
 	if err != sql.ErrNoRows {
-		return errors.New("Refer to addr already in use")
+		return errors.New("refer to addr already in use")
 	}
 	// referral chain length
 	chain, _, err := a.DbGetReferralChainFromChild(rpl.ParentAddr, big.NewInt(0))
@@ -999,4 +1006,55 @@ func (a *App) DbGetTokenInfo() (utils.APIResponseTokenHoldings, error) {
 		res.Rebates = append(res.Rebates, el)
 	}
 	return res, nil
+}
+
+// Find parent in referral chain that is never a child. This
+// should be the broker. If it is not, this means the broker
+// was switched out and we update codes and chain with the
+// current broker address
+func (a *App) DbCleanBrokerChain(brokerAddr string) error {
+	// find parent that is never a child (broker!)
+	query := `SELECT DISTINCT lower(parent)
+				FROM referral_chain rc 
+				WHERE lower(parent) NOT IN (
+					SELECT DISTINCT lower(child)
+					FROM referral_chain
+				);`
+	rows, err := a.Db.Query(query)
+	if err != nil {
+		return errors.New("Error in DbCleanBrokerChain: " + err.Error())
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var addr string
+		rows.Scan(&addr)
+		if addr == brokerAddr {
+			continue
+		}
+		msg := fmt.Sprintf("DbCleanBrokerChain: found obsolete broker %s in referral chain. Replacing with %s", addr, brokerAddr)
+		slog.Info(msg)
+		// replace in referral_code
+		query = `UPDATE referral_code
+					SET referrer_addr = CASE
+										WHEN lower(referrer_addr) = $1 THEN $2
+										ELSE lower(referrer_addr)
+										END
+					WHERE lower(referrer_addr) = $1;`
+		_, err := a.Db.Exec(query, addr, brokerAddr)
+		if err != nil {
+			return errors.New("Failed to update data: " + err.Error())
+		}
+		// also replace in referral chain
+		query = `UPDATE referral_chain
+					SET parent= CASE
+								WHEN lower(parent) = $1 THEN $2
+								ELSE lower(parent)
+								END
+					WHERE lower(parent) = $1;`
+		_, err = a.Db.Exec(query, addr, brokerAddr)
+		if err != nil {
+			return errors.New("Failed to update data: " + err.Error())
+		}
+	}
+	return nil
 }

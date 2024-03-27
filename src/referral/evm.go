@@ -160,6 +160,8 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 				Context: context.Background(),
 			}
 			var multiPayPaymentIterator *contracts.MultiPayPaymentIterator
+			// slow down
+			time.Sleep(1 * time.Second)
 			multiPayPaymentIterator, err = ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
 			if err != nil {
 				break

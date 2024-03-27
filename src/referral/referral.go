@@ -133,6 +133,9 @@ func (a *App) New(viper *viper.Viper) error {
 		return err
 	}
 
+	if strings.EqualFold(a.PaymentExecutor.GetExecutorAddrHex(), a.PaymentExecutor.GetBrokerAddr().String()) {
+		return errors.New("executor address and broker address must differ")
+	}
 	// settings to database
 	slog.Info("Writing settings to DB")
 	err = a.SettingsToDB()

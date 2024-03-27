@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/D8-X/d8x-futures-go-sdk/config"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/viper"
@@ -35,7 +36,6 @@ type Settings struct {
 	ChainId                int    `json:"chainId"`
 	PaymentMaxLookBackDays int    `json:"paymentMaxLookBackDays"`
 	PayCronSchedule        string `json:"paymentScheduleCron"`
-	MultiPayContractAddr   string `json:"multiPayContractAddr"`
 	TokenX                 struct {
 		Address  string `json:"address"`
 		Decimals uint8  `json:"decimals"`
@@ -128,7 +128,12 @@ func (a *App) New(viper *viper.Viper) error {
 
 	a.PaymentExecutor = &RemotePayExec{}
 	slog.Info("Init PaymentExecutor")
-	err = a.PaymentExecutor.Init(viper, a.Settings.MultiPayContractAddr)
+	mAddr, err := config.GetMultiPayAddr(int64(a.Settings.ChainId))
+	if err != nil {
+		return errors.New("multipay not found in sdk " + err.Error())
+	}
+	fmt.Println("Multipay contract = " + mAddr)
+	err = a.PaymentExecutor.Init(viper, mAddr)
 	if err != nil {
 		return err
 	}

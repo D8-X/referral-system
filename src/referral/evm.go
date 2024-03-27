@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/D8-X/d8x-futures-go-sdk/config"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -54,7 +55,11 @@ func (a *App) CreateMultipayInstance() error {
 	if a.RpcClient == nil {
 		return errors.New("CreateMultipayInstance requires RpcClient")
 	}
-	evmAddr := common.HexToAddress(a.Settings.MultiPayContractAddr)
+	addr, err := config.GetMultiPayAddr(int64(a.Settings.ChainId))
+	if err != nil {
+		return errors.New("CreateMultipayInstance: multipay not found in sdk " + err.Error())
+	}
+	evmAddr := common.HexToAddress(addr)
 	c, err := contracts.NewMultiPay(evmAddr, a.RpcClient)
 	if err != nil {
 		return errors.New("Failed to instantiate Proxy contract: " + err.Error())

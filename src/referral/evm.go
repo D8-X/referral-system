@@ -84,6 +84,9 @@ func (exc *basePayExec) CreateAuth() (*bind.TransactOpts, error) {
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 	chainIdB := new(big.Int).SetUint64(uint64(exc.ChainId))
 	auth, err := bind.NewKeyedTransactorWithChainID(exc.ExecPrivKey, chainIdB)
+	if err != nil {
+		return nil, err
+	}
 	signerFn := func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 		return types.SignTx(tx, types.NewEIP155Signer(chainIdB), privateKey)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"math/rand"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/D8-X/d8x-futures-go-sdk/config"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -53,7 +55,11 @@ func (a *App) CreateMultipayInstance() error {
 	if a.RpcClient == nil {
 		return errors.New("CreateMultipayInstance requires RpcClient")
 	}
-	evmAddr := common.HexToAddress(a.Settings.MultiPayContractAddr)
+	addr, err := config.GetMultiPayAddr(int64(a.Settings.ChainId))
+	if err != nil {
+		return errors.New("CreateMultipayInstance: multipay not found in sdk " + err.Error())
+	}
+	evmAddr := common.HexToAddress(addr)
 	c, err := contracts.NewMultiPay(evmAddr, a.RpcClient)
 	if err != nil {
 		return errors.New("Failed to instantiate Proxy contract: " + err.Error())
@@ -117,48 +123,75 @@ func (a *App) QueryTokenBalance(tknCtrct *contracts.Erc20, tknOwnerAddr string) 
 
 // FilterPayments collects historical events and updates the database
 func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBlock, endBlock uint64) ([]PaymentLog, error) {
+
 	header, err := client.HeaderByNumber(context.Background(), nil)
 	if err != nil {
 		return []PaymentLog{}, errors.New("Failed to get block hgeader: " + err.Error())
 	}
 	nowBlock := header.Number.Uint64()
 
-	// filter payments in batches of 5000 blocks to avoid RPC limit
 	var logs []PaymentLog
-	for {
-		endBlock := startBlock + 5000
-		// Create an event iterator for the MultiPayPayment events
-		var endBlockPtr *uint64 = &endBlock
-		if endBlock >= nowBlock {
-			endBlockPtr = nil
+	var reportCount int
+	var pathLen = float64(nowBlock - startBlock)
+	// filter payments in batches of 32_768 (and decreasing) blocks to avoid RPC limit
+	deltaBlock := uint64(32_768)
+	for trial := 0; trial < 7; trial++ {
+		err = nil
+		if trial > 0 {
+			msg := fmt.Sprintf("Retrying with num blocks=%d (%d/%d)...", deltaBlock, trial, 7)
+			slog.Info(msg)
+			time.Sleep(time.Duration(10*trial) * time.Second)
 		}
-		opts := &bind.FilterOpts{
-			Start:   startBlock,  // Starting block number
-			End:     endBlockPtr, // Ending block (nil for latest)
-			Context: context.Background(),
-		}
-		multiPayPaymentIterator, err := ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
-		if err != nil {
-			return logs, errors.New("Failed to create event iterator: " + err.Error())
-		}
-		// Iterate through the events and gather paymentlog:
-		/*
-			PaymentLog
-				BatchTimestamp string
-				Code           string
-				PoolId         uint32
-				TokenAddr      string
-				BrokerAddr     string
-				PayeeAddr      []string
-				AmountDecN     []string
-		*/
+		for {
+			endBlock := startBlock + deltaBlock
+			if reportCount%100 == 0 {
+				msg := fmt.Sprintf("Reading payments from onchain: %.0f%%", 100-100*float64(nowBlock-startBlock)/pathLen)
+				slog.Info(msg)
+			}
+			// Create an event iterator for the MultiPayPayment events
+			var endBlockPtr *uint64 = &endBlock
+			if endBlock >= nowBlock {
+				endBlockPtr = nil
+			}
+			opts := &bind.FilterOpts{
+				Start:   startBlock,  // Starting block number
+				End:     endBlockPtr, // Ending block (nil for latest)
+				Context: context.Background(),
+			}
+			var multiPayPaymentIterator *contracts.MultiPayPaymentIterator
+			multiPayPaymentIterator, err = ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
+			if err != nil {
+				break
+			}
+			// Iterate through the events and gather paymentlog:
+			/*
+				PaymentLog
+					BatchTimestamp string
+					Code           string
+					PoolId         uint32
+					TokenAddr      string
+					BrokerAddr     string
+					PayeeAddr      []string
+					AmountDecN     []string
+			*/
 
-		processMultiPayEvents(client, multiPayPaymentIterator, &logs)
-		if endBlock >= nowBlock {
+			processMultiPayEvents(client, multiPayPaymentIterator, &logs)
+			if endBlock >= nowBlock {
+				break
+			}
+			startBlock = endBlock + 1
+			reportCount += 1
+		}
+		if err == nil {
 			break
 		}
-		startBlock = endBlock + 1
+		slog.Info("Failed to create event iterator: " + err.Error())
+		deltaBlock = deltaBlock / 2
 	}
+	if err != nil {
+		return logs, err
+	}
+	slog.Info("Reading payments completed.")
 	return logs, nil
 }
 

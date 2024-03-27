@@ -21,16 +21,16 @@ func FindBlockWithTs(client *ethclient.Client, ts uint64) (uint64, uint64, error
 		return tsB, numB, nil
 	}
 	// guess and search so that ts is between tsA and tsB
-	var numA, tsA, timeEst, numCalls uint64
-	timeEst = 10
+	var numA, tsA, numCalls uint64
+	var timeEst float64 = 10
 	numCalls = 0
 	for {
-		tDiff := tsB - ts
-		timeBack := max(tDiff/timeEst, 1)
-		if timeBack >= numB {
-			return 0, 0, errors.New("Genesis Block reached timestamp search failed")
+		tDiff := float64(tsB - ts)
+		blocksBack := uint64(max(tDiff/timeEst, 1))
+		if blocksBack >= numB {
+			return 0, 0, errors.New("genesis Block reached timestamp search failed")
 		}
-		numA = numB - timeBack
+		numA = numB - blocksBack
 		numABig := big.NewInt(int64(numA))
 		blockA, err := BlockByNumberL2Compat(client, context.Background(), numABig)
 		numCalls++
@@ -42,7 +42,7 @@ func FindBlockWithTs(client *ethclient.Client, ts uint64) (uint64, uint64, error
 		if tsA < ts {
 			break
 		}
-		timeEst = max((tsB-tsA)/(numB-numA), 1)
+		timeEst = float64(tsB-tsA) / float64(blocksBack)
 		tsB = tsA
 		numB = numA
 	}

@@ -401,7 +401,13 @@ func (a *App) DbGetReferralChainForCode(code string) ([]DbReferralChainOfChild, 
 	if err != nil {
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}
-	crumble := chain[len(chain)-1].ChildAvail
+	var crumble float64
+	if len(chain) == 0 {
+		// the broker is the one who distributed the code
+		crumble = 1
+	} else {
+		crumble = chain[len(chain)-1].ChildAvail
+	}
 	codeUser := DbReferralChainOfChild{
 		Parent:     refAddr,
 		Child:      code,

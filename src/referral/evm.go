@@ -45,6 +45,7 @@ func (a *App) CreateRpcClient() error {
 			break
 		}
 	}
+	slog.Info("RPC " + a.Rpc[rnd])
 	a.RpcClient = rpc
 	return nil
 }

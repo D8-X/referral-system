@@ -199,6 +199,8 @@ func (a *App) ManagePayments() {
 			slog.Info(msg)
 			time.Sleep(time.Duration(60*trial) * time.Second)
 		}
+		// switch RPC
+		a.CreateRpcClient()
 		err = a.SavePayments()
 		if err == nil {
 			break

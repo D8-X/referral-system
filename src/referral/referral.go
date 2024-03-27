@@ -629,7 +629,7 @@ func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, paye
 			// we don't write 0 amounts to the database
 			continue
 		}
-		_, err := a.Db.Exec(query, traderAddr, payees[k].String(), code, k, poolId, ts, amounts[k].String(), tx)
+		_, err := a.Db.Exec(query, strings.ToLower(traderAddr), strings.ToLower(payees[k].String()), code, k, poolId, ts, amounts[k].String(), tx)
 		if err != nil {
 			slog.Error("dbWriteTx: could not insert tx to db for trader " + traderAddr + ": " + err.Error())
 		}

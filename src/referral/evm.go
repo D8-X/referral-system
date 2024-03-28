@@ -164,7 +164,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 			}
 			var multiPayPaymentIterator *contracts.MultiPayPaymentIterator
 			// slow down
-			time.Sleep(1 * time.Second)
+			bucket.WaitForToken("Multipay Iterator", false)
 			multiPayPaymentIterator, err = ctrct.FilterPayment(opts, []common.Address{}, []uint32{}, []common.Address{})
 			if err != nil {
 				break
@@ -208,7 +208,7 @@ func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *co
 	countDefaultCode := 0
 
 	for {
-		bucket.WaitForToken("Multipay Iterator", false)
+
 		if !multiPayPaymentIterator.Next() {
 			break // No more events to process
 		}

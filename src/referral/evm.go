@@ -133,7 +133,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		return []PaymentLog{}, errors.New("Failed to get block hgeader: " + err.Error())
 	}
 	nowBlock := header.Number.Uint64()
-
+	bucket := NewTokenBucket(15, 20)
 	var logs []PaymentLog
 	var reportCount int
 	var pathLen = float64(nowBlock - startBlock)
@@ -144,7 +144,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		if trial > 0 {
 			msg := fmt.Sprintf("Retrying with num blocks=%d (%d/%d)...", deltaBlock, trial, 7)
 			slog.Info(msg)
-			time.Sleep(time.Duration(10*trial) * time.Second)
+			time.Sleep(time.Duration(5*trial) * time.Second)
 		}
 		for {
 			endBlock := startBlock + deltaBlock
@@ -181,7 +181,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 					AmountDecN     []string
 			*/
 
-			processMultiPayEvents(client, multiPayPaymentIterator, &logs)
+			processMultiPayEvents(client, multiPayPaymentIterator, &logs, bucket)
 			if endBlock >= nowBlock {
 				break
 			}
@@ -203,11 +203,11 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 
 // processMultiPayEvents loops through blockchain events from the multipay contract and collects the data in
 // the logs slice
-func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *contracts.MultiPayPaymentIterator, logs *[]PaymentLog) {
+func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *contracts.MultiPayPaymentIterator, logs *[]PaymentLog, bucket *TokenBucket) {
 	blockTimestamps := make(map[uint64]uint64)
 	countDefaultCode := 0
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 2 tokens per second
-	bucket := NewTokenBucket(15, 5)
+
 	for {
 		bucket.WaitForToken("Multipay Iterator", false)
 		if !multiPayPaymentIterator.Next() {

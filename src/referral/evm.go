@@ -209,7 +209,7 @@ func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *co
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 2 tokens per second
 	bucket := NewTokenBucket(5, 2)
 	for {
-		bucket.WaitForToken("Multipay Iterator")
+		bucket.WaitForToken("Multipay Iterator", false)
 		if !multiPayPaymentIterator.Next() {
 			break // No more events to process
 		}
@@ -261,7 +261,7 @@ func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *co
 	// find unassigend block timestamps
 	for _, pay := range *logs {
 		if pay.BlockTs == 0 {
-			bucket.WaitForToken("Multipay Iterator")
+			bucket.WaitForToken("Multipay Iterator", false)
 			ts := getBlockTimestamp(pay.BlockNumber, client)
 			if ts != 0 {
 				blockTimestamps[pay.BlockNumber] = ts

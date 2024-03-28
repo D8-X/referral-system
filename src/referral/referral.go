@@ -336,7 +336,7 @@ func (a *App) ConfirmPaymentTxs() {
 	}
 
 	for _, tx := range txs {
-		bucket.WaitForToken("ConfirmPaymentTxs")
+		bucket.WaitForToken("ConfirmPaymentTxs", false)
 		status := QueryTxStatus(a.RpcClient, tx)
 		if status == TxFailed {
 			fail = append(fail, tx)

@@ -10,7 +10,6 @@ import (
 	"log"
 	"log/slog"
 	"math/big"
-	"math/rand"
 	"net/http"
 	"referral-system/env"
 	"referral-system/src/contracts"
@@ -276,7 +275,7 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	if t.String() != payment.TotalAmount.String() {
 		return common.Hash{}, errors.New("total amount must be sum of amounts")
 	}
-	exc.waitForToken("auth")
+	exc.RPCTokenBucket.WaitForToken("auth", false)
 	auth, err := exc.CreateAuth()
 	if err != nil {
 		slog.Error("Pay: Could not create auth: " + err.Error())
@@ -285,7 +284,7 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	if auth.From.String() != payment.Executor.String() {
 		return common.Hash{}, errors.New("payment executor must transaction sender")
 	}
-	exc.waitForToken("auth")
+	exc.RPCTokenBucket.WaitForToken("auth", false)
 	mpay, err := contracts.NewMultiPay(common.HexToAddress(exc.MultipayCtrctAddr), exc.Client)
 	if err != nil {
 		return common.Hash{}, errors.New("Failed to instantiate Proxy contract: " + err.Error())
@@ -301,24 +300,13 @@ func (exc *RemotePayExec) Pay(payment d8x_futures.PaySummary, sig string, amount
 	}
 	auth.GasLimit = 5000000
 	sigTrim := strings.TrimPrefix(sig, "0x")
-	exc.waitForToken("DelegatedPay")
+	exc.RPCTokenBucket.WaitForToken("DelegatedPay", false)
 	tx, err := mpay.DelegatedPay(auth, s, common.Hex2Bytes(sigTrim), amounts, payees, msg)
 
 	if err != nil {
 		return common.Hash{}, err
 	}
 	return tx.Hash(), nil
-}
-
-func (exc *RemotePayExec) waitForToken(topic string) {
-	for {
-		if exc.RPCTokenBucket.Take() {
-			slog.Info(topic + ": rpc token obtained")
-			return
-		}
-		slog.Info(topic + ": too many RPC requests, slowing down ")
-		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-	}
 }
 
 func privateKeyToAddress(k *ecdsa.PrivateKey) (string, error) {

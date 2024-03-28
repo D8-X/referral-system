@@ -336,7 +336,7 @@ func (a *App) ConfirmPaymentTxs() {
 	}
 
 	for _, tx := range txs {
-		bucket.WaitForToken("ConfirmPaymentTxs")
+		bucket.WaitForToken("ConfirmPaymentTxs", false)
 		status := QueryTxStatus(a.RpcClient, tx)
 		if status == TxFailed {
 			fail = append(fail, tx)
@@ -629,9 +629,9 @@ func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, paye
 			// we don't write 0 amounts to the database
 			continue
 		}
-		_, err := a.Db.Exec(query, traderAddr, payees[k].String(), code, k, poolId, ts, amounts[k].String(), tx)
+		_, err := a.Db.Exec(query, strings.ToLower(traderAddr), strings.ToLower(payees[k].String()), code, k, poolId, ts, amounts[k].String(), tx)
 		if err != nil {
-			slog.Error("Could not insert tx to db for trader " + traderAddr + ": " + err.Error())
+			slog.Error("dbWriteTx: could not insert tx to db for trader " + traderAddr + ": " + err.Error())
 		}
 	}
 }
@@ -898,7 +898,7 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 			FROM referral_payment rp
 			JOIN margin_token_info mti
 				on mti.pool_id = rp.pool_id
-			where LOWER(payee_addr)=$1
+			where LOWER(payee_addr)=LOWER($1)
 				and rp.tx_confirmed = TRUE
 			group by as_trader, rp.payee_addr, rp.pool_id, rp.code, mti.token_name;`
 	rows, err := a.Db.Query(query, addr)

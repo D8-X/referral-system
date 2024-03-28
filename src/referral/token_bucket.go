@@ -34,13 +34,17 @@ func (tb *TokenBucket) refill() {
 	}
 }
 
-func (tb *TokenBucket) WaitForToken(topic string) {
+func (tb *TokenBucket) WaitForToken(topic string, doLog bool) {
 	for {
 		if tb.Take() {
-			slog.Info(topic + ": rpc token obtained")
+			if doLog {
+				slog.Info(topic + ": rpc token obtained")
+			}
 			return
 		}
-		slog.Info(topic + ": too many RPC requests, slowing down ")
+		if doLog {
+			slog.Info(topic + ": too many RPC requests, slowing down ")
+		}
 		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	}
 }

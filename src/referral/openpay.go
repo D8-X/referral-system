@@ -1,6 +1,7 @@
 package referral
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type AggregatedFeesRow struct {
@@ -199,6 +202,8 @@ func (a *App) ManagePayments() {
 			slog.Info(msg)
 			time.Sleep(time.Duration(60*trial) * time.Second)
 		}
+		// switch RPC
+		a.CreateRpcClient()
 		err = a.SavePayments()
 		if err == nil {
 			break
@@ -356,6 +361,11 @@ func (a *App) payBatch(row AggregatedFeesRow, chain []DbReferralChainOfChild, ba
 	msg := encodePaymentInfo(batchTs, row.Code, int(row.PoolId))
 	// id = lastTradeConsideredTs in seconds
 	id := row.LastTradeConsidered.Unix()
+	// switch rpc
+	err := a.CreateRpcClient()
+	if err != nil {
+		slog.Info("Could not switch rpc client, ignoring")
+	}
 	a.PaymentExecutor.SetClient(a.RpcClient)
 
 	txHash, err := a.PaymentExecutor.TransactPayment(common.HexToAddress(row.TokenAddr), totalDecN, amounts, payees, id, msg, row.Code, a.RpcClient)
@@ -367,8 +377,27 @@ func (a *App) payBatch(row AggregatedFeesRow, chain []DbReferralChainOfChild, ba
 			return nil
 		}
 	}
-	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash)
+	_, err = waitForReceipt(a.RpcClient, txHash)
+	if err != nil {
+		slog.Info("Could not wait for receipt:" + err.Error())
+	}
+
+	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash.Hex())
 	return nil
+}
+
+func waitForReceipt(client *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
+	ctx := context.Background()
+	for {
+		receipt, err := client.TransactionReceipt(ctx, txHash)
+		if err != nil {
+			return nil, err
+		}
+		if receipt != nil {
+			return receipt, nil
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
 
 // DbGetReferralChainForCode gets the entire chain of referrals

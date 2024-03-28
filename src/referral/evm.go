@@ -183,7 +183,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 					PayeeAddr      []string
 					AmountDecN     []string
 			*/
-
+			bucket.WaitForToken("Multipay Iterator", false)
 			processMultiPayEvents(client, multiPayPaymentIterator, &logs, bucket)
 			if endBlock >= nowBlock {
 				break
@@ -197,8 +197,8 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		slog.Info("Failed to create event iterator: " + err.Error())
 		if strings.Contains(err.Error(), "429") {
 			// too many requests
-			bucketCapacity = max(int(float32(bucketCapacity)*0.75), 1)
-			bucketRefillRate = bucketRefillRate * 0.75
+			bucketCapacity = 1
+			bucketRefillRate = bucketRefillRate * 0.5
 			slog.Info("Throttling rpc requests")
 			bucket = NewTokenBucket(bucketCapacity, bucketRefillRate)
 		} else {
@@ -253,6 +253,7 @@ func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *co
 		pay.BlockNumber = uint64(multiPayPaymentIterator.Event.Raw.BlockNumber)
 		if blockTimestamps[pay.BlockNumber] == 0 {
 			// retrieve timestamp
+			bucket.WaitForToken("Multipay Iterator", false)
 			t := getBlockTimestamp(pay.BlockNumber, client)
 			// zero on error
 			blockTimestamps[pay.BlockNumber] = t

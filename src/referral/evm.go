@@ -207,7 +207,7 @@ func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *co
 	blockTimestamps := make(map[uint64]uint64)
 	countDefaultCode := 0
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 2 tokens per second
-	bucket := NewTokenBucket(5, 2)
+	bucket := NewTokenBucket(15, 5)
 	for {
 		bucket.WaitForToken("Multipay Iterator", false)
 		if !multiPayPaymentIterator.Next() {

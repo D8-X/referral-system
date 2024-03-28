@@ -42,7 +42,9 @@ func (tb *TokenBucket) WaitForToken(topic string, doLog bool) {
 			}
 			return
 		}
-		slog.Info(topic + ": too many RPC requests, slowing down ")
+		if doLog {
+			slog.Info(topic + ": too many RPC requests, slowing down ")
+		}
 		time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	}
 }

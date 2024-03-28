@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"referral-system/src/contracts"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/D8-X/d8x-futures-go-sdk/config"
@@ -133,7 +134,9 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 		return []PaymentLog{}, errors.New("Failed to get block hgeader: " + err.Error())
 	}
 	nowBlock := header.Number.Uint64()
-	bucket := NewTokenBucket(15, 20)
+	var bucketCapacity int = 15
+	var bucketRefillRate float64 = 20
+	bucket := NewTokenBucket(bucketCapacity, bucketRefillRate)
 	var logs []PaymentLog
 	var reportCount int
 	var pathLen = float64(nowBlock - startBlock)
@@ -192,7 +195,15 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 			break
 		}
 		slog.Info("Failed to create event iterator: " + err.Error())
-		deltaBlock = deltaBlock / 2
+		if strings.Contains(err.Error(), "429") {
+			// too many requests
+			bucketCapacity = max(int(float32(bucketCapacity)*0.75), 1)
+			bucketRefillRate = bucketRefillRate * 0.75
+			slog.Info("Throttling rpc requests")
+			bucket = NewTokenBucket(bucketCapacity, bucketRefillRate)
+		} else {
+			deltaBlock = deltaBlock / 2
+		}
 	}
 	if err != nil {
 		return logs, err

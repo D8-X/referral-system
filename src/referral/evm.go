@@ -141,6 +141,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 	var reportCount int
 	var pathLen = float64(nowBlock - startBlock)
 	// filter payments in batches of 32_768 (and decreasing) blocks to avoid RPC limit
+	count429 := 0
 	deltaBlock := uint64(32_768)
 	for trial := 0; trial < 7; trial++ {
 		err = nil
@@ -199,8 +200,11 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 			// too many requests
 			bucketCapacity = 1
 			bucketRefillRate = bucketRefillRate * 0.5
-			slog.Info("Throttling rpc requests")
+			msg := fmt.Sprintf("Throttling rpc requests: capacity %d, fill rate %.2f", bucketCapacity, bucketRefillRate)
+			slog.Info(msg)
 			bucket = NewTokenBucket(bucketCapacity, bucketRefillRate)
+			count429++
+			time.Sleep(time.Duration(count429*15) * time.Second)
 		} else {
 			deltaBlock = deltaBlock / 2
 		}

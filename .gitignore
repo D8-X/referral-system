@@ -21,5 +21,6 @@
 go.work
 
 .env
+.env.*
 config/keyfile.txt
 src/svc/ranky.txt

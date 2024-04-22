@@ -7,12 +7,12 @@
     ]
   },
   {
-    "chainId": 1442,
-    "HTTP": ["https://rpc.public.zkevm-test.net"]
-  },
-  {
     "chainId": 1101,
     "HTTP": ["https://zkevm-rpc.com"]
+  },
+  {
+    "chainId": 196,
+    "HTTP": ["https://xlayerrpc.okx.com"]
   },
   {
     "chainId": 2442,

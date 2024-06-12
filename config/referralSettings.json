@@ -34,8 +34,8 @@
     "paymentMaxLookBackDays": 14,
     "paymentScheduleCron": "0 14 * * 2",
     "tokenX": {
-      "address": "0xDc28023CCdfbE553643c41A335a4F555Edf937Df",
-      "decimals": 18
+      "address": "0x2444BdA650cAAe90219aa15FEd3D195a6117579F",
+      "decimals": 6
     },
     "referrerCutPercentForTokenXHolding": [
       [0.2, 0],

@@ -163,6 +163,17 @@ func (a *App) New(viper *viper.Viper) error {
 	if err != nil {
 		return err
 	}
+
+	slog.Info("Checking Token X")
+	tkn, err := a.CreateErc20Instance(a.Settings.TokenX.Address)
+	if err != nil {
+		return err
+	}
+	_, err = a.QueryTokenBalance(tkn, a.Settings.BrokerPayoutAddr.Hex())
+	if err != nil {
+		return fmt.Errorf("TokenX not valid, edit referralSettings:" + err.Error())
+	}
+
 	return nil
 }
 
@@ -1055,7 +1066,7 @@ func (a *App) DbSetPaymentExecFinished(batchTs string, hasFinished bool) error {
 	query := `INSERT INTO referral_settings (property, value, broker_id)
 	VALUES ($1, $2, $5),
 		   ($3, $4, $5)
-	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
+	ON CONFLICT (broker_id, property) DO UPDATE SET value = EXCLUDED.value`
 	_, err := a.Db.Exec(query, "batch_timestamp", batchTs, "batch_finished", hasFinishedStr, a.Settings.BrokerId)
 	if err != nil {
 		slog.Error("DbSetPaymentExecFinished:" + err.Error())

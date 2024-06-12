@@ -45,12 +45,13 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 				mti.token_name, mti.token_decimals
 			FROM referral_aggr_fees_per_trader rafpt
 			JOIN margin_token_info mti
-			ON mti.pool_id = rafpt.pool_id
-			join referral_settings rs
-			on LOWER(rs.value) = LOWER(rafpt.broker_addr)
-			and rs.property='broker_addr'
-			WHERE LOWER(trader_addr)=$1`
-	rows, err := a.Db.Query(query, traderAddr)
+				ON mti.pool_id = rafpt.pool_id
+			JOIN referral_settings rs
+				on LOWER(rs.value) = LOWER(rafpt.broker_addr)
+				AND rs.property='broker_addr'
+			WHERE LOWER(trader_addr)=$1
+				AND rafpt.broker_id = $2`
+	rows, err := a.Db.Query(query, traderAddr, a.Settings.BrokerId)
 	if err != nil {
 		slog.Error("Error for open pay" + err.Error())
 		return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
@@ -116,18 +117,18 @@ func (a *App) SchedulePayment() {
 // batch number
 func (a *App) dbGetPayBatch() (bool, int64) {
 	query := `SELECT value FROM referral_settings rs
-	WHERE rs.property='batch_finished'`
+	WHERE rs.property='batch_finished' AND broker_id=$1`
 
 	var hasFinishedStr string
-	err := a.Db.QueryRow(query).Scan(&hasFinishedStr)
+	err := a.Db.QueryRow(query, a.Settings.BrokerId).Scan(&hasFinishedStr)
 	if err == sql.ErrNoRows {
 		return true, 0
 	}
 
 	var ts string
 	query = `SELECT value FROM referral_settings rs
-		WHERE rs.property='batch_timestamp'`
-	err = a.Db.QueryRow(query).Scan(&ts)
+		WHERE rs.property='batch_timestamp' AND broker_id=$1`
+	err = a.Db.QueryRow(query, a.Settings.BrokerId).Scan(&ts)
 	if err != nil {
 		return true, 0
 	}
@@ -147,12 +148,14 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 					mti.token_addr, mti.token_decimals
 				FROM referral_aggr_fees_per_trader agfpt
 				JOIN margin_token_info mti
-				ON mti.pool_id = agfpt.pool_id
-				join referral_settings rs
-				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
-				and rs.property='broker_addr'
-				group by agfpt.pool_id, mti.token_addr, mti.token_decimals`
-	rows, err := a.Db.Query(query)
+					ON mti.pool_id = agfpt.pool_id
+				JOIN referral_settings rs
+					ON LOWER(rs.value) = LOWER(agfpt.broker_addr)
+					AND rs.property='broker_addr'
+					AND rs.broker_id=$1
+				WHERE agfpt.broker_id=$1
+				GROUP BY agfpt.pool_id, mti.token_addr, mti.token_decimals`
+	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		return nil, errors.New("determineScalingFactor:" + err.Error())
 	}
@@ -266,15 +269,16 @@ func (a *App) processPayments(batchTs string) error {
 	}
 	// query snapshot of open pay view
 	query := `SELECT agfpt.pool_id, agfpt.trader_addr, agfpt.code, 
-					agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
-					mti.token_addr, mti.token_decimals
-				FROM referral_aggr_fees_per_trader agfpt
-				JOIN margin_token_info mti
-				ON mti.pool_id = agfpt.pool_id
-				join referral_settings rs
-				on LOWER(rs.value) = LOWER(agfpt.broker_addr)
-				and rs.property='broker_addr'`
-	rows, err := a.Db.Query(query)
+				agfpt.broker_fee_cc, agfpt.last_trade_considered_ts,
+				mti.token_addr, mti.token_decimals
+			  FROM referral_aggr_fees_per_trader agfpt
+			  JOIN margin_token_info mti
+			  	ON mti.pool_id = agfpt.pool_id
+			  JOIN referral_settings rs
+			  	ON LOWER(rs.value) = LOWER(agfpt.broker_addr)
+			  	AND rs.property='broker_addr'
+			  	and rs.broker_id = $1`
+	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		slog.Error("Error for process pay" + err.Error())
 		return err
@@ -301,7 +305,7 @@ func (a *App) processPayments(batchTs string) error {
 		if _, exists := codePaths[el.Code]; !exists {
 			chain, err := a.DbGetReferralChainForCode(el.Code)
 			if err != nil {
-				slog.Error("Could not find referral chain for code " + el.Code + ": " + err.Error())
+				slog.Error("could not find referral chain for code " + el.Code + ": " + err.Error())
 				continue
 			}
 			codePaths[el.Code] = chain
@@ -316,7 +320,7 @@ func (a *App) processPayments(batchTs string) error {
 	}
 	err = a.DbSetPaymentExecFinished(batchTs, true)
 	if err != nil {
-		slog.Error("Could not set payment status to finished, but finished:" + err.Error())
+		slog.Error("could not set payment status to finished, but finished:" + err.Error())
 	}
 	slog.Info("Payment execution done, waiting before confirming payments...")
 	// wait before we aim to confirm payments
@@ -415,18 +419,17 @@ func (a *App) DbGetReferralChainForCode(code string) ([]DbReferralChainOfChild, 
 		}
 		return res, nil
 	}
-	query := `SELECT LOWER(referrer_addr), trader_rebate_perc
-		FROM referral_code WHERE code = $1`
+	query := `SELECT LOWER(referrer_addr) as addr, trader_rebate_perc
+		FROM referral_code WHERE code = $1 AND broker_id = $2`
 	var refAddr string
 	var traderCut float64
-	err := a.Db.QueryRow(query, code).Scan(&refAddr, &traderCut)
+	err := a.Db.QueryRow(query, code, a.Settings.BrokerId).Scan(&refAddr, &traderCut)
 	if err != nil {
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}
 	traderCut = traderCut / 100
 
-	h := new(big.Int).SetInt64(0)
-	chain, _, err := a.DbGetReferralChainFromChild(refAddr, h)
+	chain, _, err := a.DbGetReferralChainFromChild(refAddr, nil)
 	if err != nil {
 		return []DbReferralChainOfChild{}, errors.New("DbGetReferralChainForCode:" + err.Error())
 	}

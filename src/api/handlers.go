@@ -255,6 +255,8 @@ func onReferCut(w http.ResponseWriter, r *http.Request, app *referral.App) {
 	holdings := new(big.Int).SetInt64(0)
 	if h != "" {
 		holdings.SetString(h, 10)
+	} else {
+		holdings = nil
 	}
 
 	cut, isAgency, err := app.CutPercentageAgency(addr, holdings)

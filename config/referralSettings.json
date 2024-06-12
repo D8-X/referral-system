@@ -1,6 +1,7 @@
 [
   {
     "brokerPayoutAddr": "0xdef43CF2Dd024abc5447C1Dcdc2fE3FE58547b84",
+    "brokerId": "hexafi",
     "chainId": 196,
     "paymentMaxLookBackDays": 14,
     "paymentScheduleCron": "0 08 * * *",
@@ -29,11 +30,12 @@
   },
   {
     "chainId": 195,
+    "brokerId": "hexafi",
     "paymentMaxLookBackDays": 14,
     "paymentScheduleCron": "0 14 * * 2",
     "tokenX": {
-      "address": "0xd08B8E59a36BaA7EED60E21C1D6a7778811C30eD",
-      "decimals": 18
+      "address": "0x2444BdA650cAAe90219aa15FEd3D195a6117579F",
+      "decimals": 6
     },
     "referrerCutPercentForTokenXHolding": [
       [0.2, 0],
@@ -45,6 +47,7 @@
   },
   {
     "chainId": 1101,
+    "brokerId": "hexafi",
     "paymentMaxLookBackDays": 14,
     "paymentScheduleCron": "0 08 * * 2",
     "tokenX": { "address": "0xDc28023CCdfbE553643c41A335a4F555Edf937Df", "decimals": 18 },
@@ -58,32 +61,7 @@
   },
   {
     "chainId": 421614,
-    "paymentMaxLookBackDays": 14,
-    "paymentScheduleCron": "0 08 * * 2",
-    "tokenX": { "address": "0x9a1E6C2f81bE72Af2C4138Bbec3d9029516f27a6", "decimals": 18 },
-    "referrerCutPercentForTokenXHolding": [
-        [0.2, 0],
-        [1.5, 100],
-        [2.5, 1000],
-        [3.75, 10000]
-      ],
-    "brokerPayoutAddr": "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05"
-  },
-  {
-    "chainId": 2442,
-    "paymentMaxLookBackDays": 14,
-    "paymentScheduleCron": "0 08 * * 2",
-    "tokenX": { "address": "0x9a1E6C2f81bE72Af2C4138Bbec3d9029516f27a6", "decimals": 18 },
-    "referrerCutPercentForTokenXHolding": [
-        [0.2, 0],
-        [1.5, 100],
-        [2.5, 1000],
-        [3.75, 10000]
-      ],
-    "brokerPayoutAddr": "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05"
-  },
-  {
-    "chainId": 80085,
+    "brokerId": "hexafi",
     "paymentMaxLookBackDays": 14,
     "paymentScheduleCron": "0 08 * * 2",
     "tokenX": { "address": "0x9a1E6C2f81bE72Af2C4138Bbec3d9029516f27a6", "decimals": 18 },

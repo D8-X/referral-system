@@ -15,8 +15,8 @@
     "HTTP": ["https://xlayerrpc.okx.com"]
   },
   {
-    "chainId": 2442,
-    "HTTP": ["https://rpc.cardona.zkevm-rpc.com"]
+    "chainId": 195,
+    "HTTP": ["https://endpoints.omniatech.io/v1/xlayer/testnet/public","https://testrpc.xlayer.tech", "https://xlayertestrpc.okx.com"]
   },
   {
     "chainId": 421614,

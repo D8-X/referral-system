@@ -42,6 +42,7 @@ type Settings struct {
 	} `json:"tokenX"`
 	ReferrerCut      [][]float64    `json:"referrerCutPercentForTokenXHolding"`
 	BrokerPayoutAddr common.Address `json:"brokerPayoutAddr"`
+	BrokerId         string         `json:"brokerId"`
 }
 
 type Rpc struct {
@@ -113,11 +114,11 @@ func (a *App) New(viper *viper.Viper) error {
 
 	// load settings
 	slog.Info("Loading configuration")
-	s, err := loadConfig(viper)
+	settings, err := loadConfig(viper)
 	if err != nil {
 		return err
 	}
-	a.Settings = s
+	a.Settings = settings
 
 	slog.Info("Loading RPC configuration")
 	rpcs, err := loadRPCConfig(viper)
@@ -144,12 +145,7 @@ func (a *App) New(viper *viper.Viper) error {
 	if strings.EqualFold(a.Settings.BrokerPayoutAddr.String(), a.PaymentExecutor.GetBrokerAddr().String()) {
 		return errors.New("broker address and broker-payout address must differ")
 	}
-	// settings to database
-	slog.Info("Writing settings to DB")
-	err = a.SettingsToDB()
-	if err != nil {
-		return err
-	}
+
 	// connect db
 	connStr := viper.GetString(env.DATABASE_DSN_HISTORY)
 	err = a.ConnectDB(connStr)
@@ -189,6 +185,9 @@ func loadConfig(v *viper.Viper) (Settings, error) {
 	for k := 0; k < len(settings); k++ {
 		if settings[k].ChainId == targetChain {
 			setting = settings[k]
+			if setting.BrokerId == "" {
+				return Settings{}, errors.New("brokerId missing in referralSettings.json")
+			}
 			break
 		}
 	}
@@ -224,10 +223,10 @@ func loadRPCConfig(v *viper.Viper) ([]string, error) {
 // SettingsToDB stores relevant settings to the DB
 func (a *App) SettingsToDB() error {
 	query := `
-	INSERT INTO referral_settings (property, value)
-	VALUES ($1, $2)
-	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
-	_, err := a.Db.Exec(query, "payment_max_lookback_days", a.Settings.PaymentMaxLookBackDays)
+	INSERT INTO referral_settings (property, value, broker_id)
+	VALUES ($1, $2, $3)
+	ON CONFLICT (property, broker_id) DO UPDATE SET value = EXCLUDED.value`
+	_, err := a.Db.Exec(query, "payment_max_lookback_days", a.Settings.PaymentMaxLookBackDays, a.Settings.BrokerId)
 
 	if err != nil {
 		return err
@@ -237,11 +236,7 @@ func (a *App) SettingsToDB() error {
 	addr := a.PaymentExecutor.GetBrokerAddr().String()
 	addr = strings.ToLower(addr)
 	a.BrokerAddr = addr
-	query = `
-	INSERT INTO referral_settings (property, value)
-	VALUES ($1, $2)
-	ON CONFLICT (property) DO UPDATE SET value = EXCLUDED.value`
-	_, err = a.Db.Exec(query, "broker_addr", addr)
+	_, err = a.Db.Exec(query, "broker_addr", addr, a.Settings.BrokerId)
 	if err != nil {
 		return err
 	}
@@ -253,8 +248,8 @@ func (a *App) SettingsToDB() error {
 	dec := a.Settings.TokenX.Decimals
 	tkn := a.Settings.TokenX.Address
 
-	query = `DELETE FROM referral_setting_cut;`
-	_, err = a.Db.Exec(query)
+	query = `DELETE FROM referral_setting_cut WHERE broker_id=$1;`
+	_, err = a.Db.Exec(query, a.Settings.BrokerId)
 	if err != nil {
 		slog.Error(err.Error())
 	}
@@ -264,9 +259,9 @@ func (a *App) SettingsToDB() error {
 		holding := a.Settings.ReferrerCut[k][1]
 		holdingDecN := utils.FloatToDecN(holding, dec)
 		query = `
-		INSERT INTO referral_setting_cut (cut_perc, holding_amount_dec_n, token_addr)
-		VALUES ($1, $2, $3)`
-		_, err = a.Db.Exec(query, perc, holdingDecN.String(), tkn)
+		INSERT INTO referral_setting_cut (cut_perc, holding_amount_dec_n, token_addr, broker_id)
+		VALUES ($1, $2, $3, $4)`
+		_, err = a.Db.Exec(query, perc, holdingDecN.String(), tkn, a.Settings.BrokerId)
 		if err != nil {
 			slog.Error("could not insert referral setting:" + err.Error())
 			continue
@@ -1027,11 +1022,13 @@ func (a *App) DbCleanBrokerChain(brokerAddr string) error {
 	// find parent that is never a child (broker!)
 	query := `SELECT DISTINCT lower(parent)
 				FROM referral_chain rc 
-				WHERE lower(parent) NOT IN (
+				WHERE 
+				broker_id=$1 AND
+				lower(parent) NOT IN (
 					SELECT DISTINCT lower(child)
 					FROM referral_chain
 				);`
-	rows, err := a.Db.Query(query)
+	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		return errors.New("Error in DbCleanBrokerChain: " + err.Error())
 	}
@@ -1050,8 +1047,9 @@ func (a *App) DbCleanBrokerChain(brokerAddr string) error {
 										WHEN lower(referrer_addr) = $1 THEN $2
 										ELSE lower(referrer_addr)
 										END
-					WHERE lower(referrer_addr) = $1;`
-		_, err := a.Db.Exec(query, addr, brokerAddr)
+					WHERE lower(referrer_addr) = $1 
+					AND broker_id=$3;`
+		_, err := a.Db.Exec(query, addr, brokerAddr, a.Settings.BrokerId)
 		if err != nil {
 			return errors.New("Failed to update data: " + err.Error())
 		}
@@ -1061,8 +1059,9 @@ func (a *App) DbCleanBrokerChain(brokerAddr string) error {
 								WHEN lower(parent) = $1 THEN $2
 								ELSE lower(parent)
 								END
-					WHERE lower(parent) = $1;`
-		_, err = a.Db.Exec(query, addr, brokerAddr)
+					WHERE lower(parent) = $1
+					AND broker_id=$3;`
+		_, err = a.Db.Exec(query, addr, brokerAddr, a.Settings.BrokerId)
 		if err != nil {
 			return errors.New("Failed to update data: " + err.Error())
 		}

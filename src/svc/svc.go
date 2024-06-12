@@ -59,11 +59,23 @@ func Run() {
 	}
 
 	err = app.New(v)
-
 	if err != nil {
-		slog.Error("Error:" + err.Error())
+		slog.Error(err.Error())
 		return
 	}
+	err = replaceEmptyBrokerName(app.Db, app.Settings.BrokerId)
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+	// settings to database
+	slog.Info("Writing settings to DB")
+	err = app.SettingsToDB()
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+
 	if !utils.IsValidPaymentSchedule(app.Settings.PayCronSchedule) {
 		slog.Error("Error: paymentScheduleCron not a valid CRON-expression")
 		return
@@ -111,6 +123,35 @@ func loadEnv() (*viper.Viper, error) {
 	}
 
 	return v, nil
+}
+
+// replaceEmptyBrokerName goes through all relevant tables and replaces
+// an empty brokerId "" with the broker name configured in
+// settings
+func replaceEmptyBrokerName(dbInstance *sql.DB, brokerId string) error {
+	// Update statements
+	updateQueries := []string{
+		`UPDATE "referral_chain" SET "broker_id" = $1 WHERE "broker_id" = ''`,
+		`UPDATE "referral_code" SET "broker_id" = $1 WHERE "broker_id" = ''`,
+		`UPDATE "referral_code_usage" SET "broker_id" = $1 WHERE "broker_id" = ''`,
+		`UPDATE "referral_settings" SET "broker_id" = $1 WHERE "broker_id" = ''`,
+		`UPDATE "referral_payment" SET "broker_id" = $1 WHERE "broker_id" = ''`,
+		`UPDATE "referral_setting_cut" SET "broker_id" = $1 WHERE "broker_id" = ''`,
+	}
+	// Execute the update statements
+	var rows int64
+	for _, query := range updateQueries {
+		result, err := dbInstance.Exec(query, brokerId)
+		rowsAffected, _ := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("error executing query %s: %v", query, err)
+		}
+		rows += rowsAffected
+	}
+	if rows > 0 {
+		fmt.Printf("updated %d occurrences of empty broker with %s", rows, brokerId)
+	}
+	return nil
 }
 
 func runMigrations(postgresDSN string, dbInstance *sql.DB) error {

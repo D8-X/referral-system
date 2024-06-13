@@ -169,11 +169,18 @@ func (a *App) New(viper *viper.Viper) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.QueryTokenBalance(tkn, a.Settings.BrokerPayoutAddr.Hex())
-	if err != nil {
-		return fmt.Errorf("TokenX not valid, edit referralSettings:" + err.Error())
+	for trial := 0; trial < 4; trial++ {
+		_, err = a.QueryTokenBalance(tkn, a.Settings.BrokerPayoutAddr.Hex())
+		if err == nil {
+			break
+		}
+		slog.Info("failed to query Token X:" + err.Error())
+		time.Sleep(time.Duration(2*(trial+1)) * time.Second)
 	}
-
+	if err != nil {
+		return fmt.Errorf("TokenX address %s not valid, edit referralSettings: %s", a.Settings.TokenX.Address, err.Error())
+	}
+	slog.Info("Token X ok")
 	return nil
 }
 

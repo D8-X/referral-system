@@ -41,6 +41,7 @@ func (a *App) CreateRpcClient() error {
 				return err
 			}
 			slog.Info("Rpc error" + err.Error() + " retrying " + strconv.Itoa(5-trial))
+			slog.Info("RPC " + a.Rpc[rnd])
 			time.Sleep(time.Duration(2) * time.Second)
 		} else {
 			break

@@ -131,8 +131,8 @@ func logPaymentIntent(tokenAddr common.Address, amounts []*big.Int, payees []com
 	slog.Info("transact " + code + ";" + msg + ", last trade " + strconv.FormatInt(id, 10))
 	for k := 0; k < len(payees); k++ {
 		slog.Info(" -- Payee " + payees[k].String())
-		slog.Info("    Amount (decN)" + amounts[k].String())
-		slog.Info("    Token addr" + tokenAddr.Hex())
+		slog.Info("    Amount (decN) " + amounts[k].String())
+		slog.Info("    Token addr " + tokenAddr.Hex())
 	}
 }
 

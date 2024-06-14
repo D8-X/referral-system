@@ -697,23 +697,27 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	if a.Db == nil {
 		return errors.New("db not initialized")
 	}
+	brokerAddr := strings.ToLower(p.BrokerAddr)
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
-	query := `SELECT tx_confirmed FROM referral_payment 
+	query := `SELECT tx_confirmed, broker_addr FROM referral_payment 
 			  WHERE lower(trader_addr) = lower($1) 
 			  	AND lower(payee_addr) = lower($2) 
 				AND batch_ts = $3 
 				AND pool_id=$4
-				AND level=$5
-				AND broker_id=$6`
+				AND level=$5`
+	// we are not adding AND broker_addr=brokerAddr in this query because after db migration the entry broker_addr is empty.
+	// the risk that we have two exact same entries but for the brokerAddr is very very low. Not adding it above ensures
+	// we fill the table historically with the broker_addr
 	var isConfirmed bool
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx, a.Settings.BrokerId).Scan(&isConfirmed)
+	var dbBrokerAddr string
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment 
 			(trader_addr, payee_addr, code, level, 
 			 pool_id, batch_ts, paid_amount_cc, tx_hash, 
-			 block_nr, block_ts, tx_confirmed, broker_id)
+			 block_nr, block_ts, tx_confirmed, broker_addr)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 		_, err := a.Db.Exec(query,
 			traderAddr,
@@ -727,22 +731,21 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 			p.BlockNumber,
 			utcBlockTime,
 			true,
-			a.Settings.BrokerId)
+			brokerAddr)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
 	} else if err != nil {
 		return err
-	} else if !isConfirmed {
+	} else if !isConfirmed || dbBrokerAddr == "" {
 		// set tx confirmed to true
 		query = `UPDATE referral_payment 
-				SET tx_confirmed = true, block_nr = $4, block_ts = $5
+				SET tx_confirmed = true, block_nr = $5, block_ts = $6, broker_addr=$7
 				WHERE lower(trader_addr) = lower($1) 
 					AND lower(payee_addr) = lower($2) 
 					AND batch_ts = $3
-					AND level = $4
-					AND broker_id = $5`
-		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime, a.Settings.BrokerId)
+					AND level = $4`
+		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime, brokerAddr)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}

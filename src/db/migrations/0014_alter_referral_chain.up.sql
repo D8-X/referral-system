@@ -41,15 +41,16 @@ DROP CONSTRAINT "referral_settings_pkey";
 ALTER TABLE "referral_settings"
 ADD CONSTRAINT "referral_settings_pkey" PRIMARY KEY ("broker_id","property");
 
--- payment table
+-- referral_payment: this table contains payments that everyone sees, hence no broker id but broker_addr so we know
+--  for which broker the payment was made (important for instance for the default)
 ALTER TABLE "referral_payment"
-ADD COLUMN "broker_id" VARCHAR(42) NOT NULL DEFAULT '';
+ADD COLUMN "broker_addr" VARCHAR(42) NOT NULL DEFAULT '';
 
 ALTER TABLE "referral_payment"
 DROP CONSTRAINT "referral_payment_pkey";
 
 ALTER TABLE "referral_payment"
-ADD CONSTRAINT "referral_payment_pkey" PRIMARY KEY ("broker_id", "trader_addr", "payee_addr", "pool_id", "code", "batch_ts", "level");
+ADD CONSTRAINT "referral_payment_pkey" PRIMARY KEY (trader_addr, broker_addr, payee_addr, code, pool_id, batch_ts, level);
 
 -- referral_setting_cut
 ALTER TABLE "referral_setting_cut"

@@ -135,17 +135,16 @@ func replaceEmptyBrokerName(dbInstance *sql.DB, brokerId string) error {
 		`UPDATE "referral_code" SET "broker_id" = $1 WHERE "broker_id" = ''`,
 		`UPDATE "referral_code_usage" SET "broker_id" = $1 WHERE "broker_id" = ''`,
 		`UPDATE "referral_settings" SET "broker_id" = $1 WHERE "broker_id" = ''`,
-		`UPDATE "referral_payment" SET "broker_id" = $1 WHERE "broker_id" = ''`,
 		`UPDATE "referral_setting_cut" SET "broker_id" = $1 WHERE "broker_id" = ''`,
 	}
 	// Execute the update statements
 	var rows int64
 	for _, query := range updateQueries {
 		result, err := dbInstance.Exec(query, brokerId)
-		rowsAffected, _ := result.RowsAffected()
 		if err != nil {
 			return fmt.Errorf("error executing query %s: %v", query, err)
 		}
+		rowsAffected, _ := result.RowsAffected()
 		rows += rowsAffected
 	}
 	if rows > 0 {

@@ -45,6 +45,6 @@ LEFT JOIN referral_last_payment lp
     AND LOWER(th.broker_addr)=LOWER(lp.broker_addr)
 WHERE (
 		(lp.last_payment_ts IS null and current_date::timestamp - (rs.value || ' days')::interval < th.trade_timestamp) 
-		OR lp.last_payment_ts<th.trade_timestamp
+		OR GREATEST(current_date::timestamp - (rs.value || ' days')::interval, lp.last_payment_ts) < th.trade_timestamp
 	)
 GROUP BY pool_id, rs_broker_id.broker_id, th.trader_addr, th.broker_addr, th.perpetual_id/100000, rs.value,codeusg.code,lp.last_payment_ts;

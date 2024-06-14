@@ -49,7 +49,8 @@ ALTER TABLE "referral_payment"
 DROP CONSTRAINT "referral_payment_pkey";
 
 ALTER TABLE "referral_payment"
-ADD CONSTRAINT "referral_payment_pkey" PRIMARY KEY ("broker_id", "trader_addr", "payee_addr", "pool_id", "code", "batch_ts", "level");
+ADD CONSTRAINT "referral_payment_pkey" PRIMARY KEY ("broker_id", "trader_addr", "payee_addr", "pool_id", "code", "batch_ts", "level", "tx_hash");
+--primary key: we also add tx hash in case a payment would be executed twice we would see this in the DB
 
 -- referral_setting_cut
 ALTER TABLE "referral_setting_cut"

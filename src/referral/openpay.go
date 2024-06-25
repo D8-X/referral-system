@@ -384,8 +384,8 @@ func (a *App) payBatch(row AggregatedFeesRow, chain []DbReferralChainOfChild, ba
 	if err != nil {
 		slog.Info("Could not wait for receipt:" + err.Error())
 	}
-
-	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash.Hex())
+	brokerAddr := a.PaymentExecutor.GetBrokerAddr().Hex()
+	a.dbWriteTx(row.TraderAddr, brokerAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash.Hex())
 	return nil
 }
 

@@ -402,13 +402,11 @@ func (a *App) DBGetUnconfirmedPayTxForLastBatch() ([]string, int64) {
 				rp.batch_ts
 				FROM referral_payment rp 
 				WHERE rp.tx_confirmed = false 
-				AND broker_id=$1
 				AND batch_ts IN (
 					SELECT max(rp2.batch_ts) as max_ts
 					FROM referral_payment rp2 
-					WHERE broker_id=$1
 				)`
-	rows, err := a.Db.Query(query, a.Settings.BrokerId)
+	rows, err := a.Db.Query(query)
 	if err != nil {
 		slog.Error("Error in DBGetUnconfirmedPayTxForLastBatch:" + err.Error())
 		return []string{}, 0
@@ -480,9 +478,8 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 					code, level, pool_id, batch_ts, paid_amount_cc, 
 					tx_hash, block_ts
 				FROM referral_payment rp 
-				WHERE tx_confirmed = false
-				AND broker_id=$1;`
-	rows, err := a.Db.Query(query, a.Settings.BrokerId)
+				WHERE tx_confirmed = false;`
+	rows, err := a.Db.Query(query)
 	if err != nil {
 		return err
 	}
@@ -504,10 +501,10 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 		}
 		slog.Info("Moving to failed payments tx hash = " + row.TxHash)
 		query = `INSERT INTO referral_failed_payment
-			(trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, ts, broker_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+			(trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, ts)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 		_, err := a.Db.Exec(query, row.TraderAddr, row.PayeeAddr, row.Code, row.Level, row.PoolId, row.BatchTs, row.PaidAmountCC,
-			row.TxHash, row.BlockTs, a.Settings.BrokerId)
+			row.TxHash, row.BlockTs)
 		idx++
 		if err != nil {
 			slog.Error("could not insert tx to failed tx " + row.TxHash + ": " + err.Error())
@@ -663,11 +660,11 @@ func (a *App) IsAgency(addr string) (bool, bool) {
 }
 
 // dbWriteTx write info about the payment transaction into referral_payment
-func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, payees []common.Address, batchTs string, poolId uint32, tx string) {
+func (a *App) dbWriteTx(traderAddr, brokerAddr, code string, amounts []*big.Int, payees []common.Address, batchTs string, poolId uint32, tx string) {
 	slog.Info("Inserting Payment TX in DB")
 	t, _ := strconv.Atoi(batchTs)
 	ts := time.Unix(int64(t), 0)
-	query := `INSERT INTO referral_payment (trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, broker_id)
+	query := `INSERT INTO referral_payment (trader_addr, payee_addr, code, level, pool_id, batch_ts, paid_amount_cc, tx_hash, broker_addr)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 	for k := 0; k < len(payees); k++ {
 		if amounts[k].BitLen() == 0 {
@@ -683,9 +680,9 @@ func (a *App) dbWriteTx(traderAddr string, code string, amounts []*big.Int, paye
 			ts,
 			amounts[k].String(),
 			tx,
-			a.Settings.BrokerId)
+			strings.ToLower(brokerAddr))
 		if err != nil {
-			slog.Error(fmt.Sprintf("dbWriteTx: could not insert tx to db for trader %s, lvl %d, code %s: %s", traderAddr, k, code, err.Error()))
+			slog.Error(fmt.Sprintf("dbWriteTx: could not insert tx to db for trader %s and broker %s, lvl %d, code %s: %s", traderAddr, brokerAddr, k, code, err.Error()))
 		}
 	}
 }

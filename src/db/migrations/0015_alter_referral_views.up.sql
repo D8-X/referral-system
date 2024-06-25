@@ -7,17 +7,17 @@ DROP VIEW IF EXISTS referral_last_payment, referral_aggr_fees_per_trader;
 -- last payment view referral_last_payment
 CREATE OR REPLACE VIEW referral_last_payment AS
 SELECT 
-    broker_id,
+    LOWER(broker_addr) as broker_addr,
     pool_id,
 	LOWER(trader_addr) as trader_addr,
 	BOOL_AND(tx_confirmed) as tx_confirmed, -- false if there are payments that haven't been confirmed yet
-	MAX(block_ts) as last_payment_ts 
-FROM referral_payment GROUP BY LOWER(trader_addr), broker_id, pool_id;
+	MAX(block_ts) as last_payment_ts
+FROM referral_payment GROUP BY LOWER(trader_addr), LOWER(broker_addr), pool_id;
 
 -- referral_aggr_fees_per_trader
 CREATE OR REPLACE VIEW referral_aggr_fees_per_trader AS
 SELECT 
-    rs2.broker_id,
+    rs_broker_id.broker_id,
     th.perpetual_id/100000 as pool_id,
     th.trader_addr,
     th.broker_addr,
@@ -29,16 +29,22 @@ SELECT
     lp.last_payment_ts,
     coalesce(lp.last_payment_ts, current_date::timestamp - (rs.value || ' days')::interval) as pay_period_start_ts
 FROM trades_history th
-join referral_settings rs on rs.property = 'payment_max_lookback_days'
-join referral_settings rs2 on rs2.property = 'broker_addr'
-LEFT JOIN referral_last_payment lp
-    ON LOWER(lp.trader_addr)=LOWER(th.trader_addr) and lp.pool_id=th.perpetual_id/100000
+JOIN referral_settings rs_broker_id -- join settings table to get broker-id for given broker address
+	 ON rs_broker_id.property = 'broker_addr'
+	 AND rs_broker_id.value = th.broker_addr
+JOIN referral_settings rs 
+	ON rs.property = 'payment_max_lookback_days'
+	and rs.broker_id = rs_broker_id.broker_id
 LEFT JOIN referral_code_usage codeusg
     ON LOWER(th.trader_addr) = LOWER(codeusg.trader_addr)
-    AND LOWER(th.broker_addr) = LOWER(rs2.value)
+    AND rs_broker_id.broker_id = LOWER(codeusg.broker_id)
     AND codeusg.valid_to > NOW()
-WHERE ((lp.last_payment_ts IS null and current_date::timestamp - (rs.value || ' days')::interval < th.trade_timestamp) OR lp.last_payment_ts<th.trade_timestamp)
-    AND (lp.pool_id IS NULL OR lp.pool_id = th.perpetual_id/100000)
-    AND (lp.tx_confirmed IS NULL OR lp.tx_confirmed=true)
-GROUP BY pool_id, rs2.value, rs2.broker_id, th.trader_addr, th.broker_addr, lp.last_payment_ts, codeusg.code, th.perpetual_id/100000, rs.value
-ORDER BY th.trader_addr;
+LEFT JOIN referral_last_payment lp
+    ON LOWER(lp.trader_addr)=LOWER(th.trader_addr)
+	AND lp.pool_id=th.perpetual_id/100000
+    AND LOWER(th.broker_addr)=LOWER(lp.broker_addr)
+WHERE (
+		(lp.last_payment_ts IS null and current_date::timestamp - (rs.value || ' days')::interval < th.trade_timestamp) 
+		OR GREATEST(current_date::timestamp - (rs.value || ' days')::interval, lp.last_payment_ts) < th.trade_timestamp
+	)
+GROUP BY pool_id, rs_broker_id.broker_id, th.trader_addr, th.broker_addr, th.perpetual_id/100000, rs.value,codeusg.code,lp.last_payment_ts;

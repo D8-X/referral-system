@@ -47,10 +47,10 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 			JOIN margin_token_info mti
 				ON mti.pool_id = rafpt.pool_id
 			JOIN referral_settings rs
-				on LOWER(rs.value) = LOWER(rafpt.broker_addr)
-				AND rs.property='broker_addr'
+				ON rs.property='broker_addr'
+				AND rs.broker_id=$2
 			WHERE LOWER(trader_addr)=$1
-				AND rafpt.broker_id = $2`
+				AND LOWER(rs.value) = LOWER(rafpt.broker_addr)`
 	rows, err := a.Db.Query(query, traderAddr, a.Settings.BrokerId)
 	if err != nil {
 		slog.Error("Error for open pay" + err.Error())
@@ -150,10 +150,9 @@ func (a *App) DetermineScalingFactor() (map[uint32]float64, error) {
 				JOIN margin_token_info mti
 					ON mti.pool_id = agfpt.pool_id
 				JOIN referral_settings rs
-					ON LOWER(rs.value) = LOWER(agfpt.broker_addr)
-					AND rs.property='broker_addr'
+					ON rs.property='broker_addr'
 					AND rs.broker_id=$1
-				WHERE agfpt.broker_id=$1
+				WHERE LOWER(agfpt.broker_addr)=LOWER(rs.value)
 				GROUP BY agfpt.pool_id, mti.token_addr, mti.token_decimals`
 	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
@@ -275,9 +274,9 @@ func (a *App) processPayments(batchTs string) error {
 			  JOIN margin_token_info mti
 			  	ON mti.pool_id = agfpt.pool_id
 			  JOIN referral_settings rs
-			  	ON LOWER(rs.value) = LOWER(agfpt.broker_addr)
-			  	AND rs.property='broker_addr'
-			  	and rs.broker_id = $1`
+			  	ON rs.property='broker_addr'
+			  	AND rs.broker_id = $1
+			  WHERE LOWER(agfpt.broker_addr)=LOWER(rs.value)`
 	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		slog.Error("Error for process pay" + err.Error())
@@ -385,8 +384,8 @@ func (a *App) payBatch(row AggregatedFeesRow, chain []DbReferralChainOfChild, ba
 	if err != nil {
 		slog.Info("Could not wait for receipt:" + err.Error())
 	}
-
-	a.dbWriteTx(row.TraderAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash.Hex())
+	brokerAddr := a.PaymentExecutor.GetBrokerAddr().Hex()
+	a.dbWriteTx(row.TraderAddr, brokerAddr, row.Code, amounts, payees, batchTs, row.PoolId, txHash.Hex())
 	return nil
 }
 

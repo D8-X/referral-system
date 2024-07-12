@@ -997,13 +997,17 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 // token balance update time
 func (a *App) DbGetActiveReferrers() ([]string, []time.Time, error) {
 	query := `SELECT distinct(lower(rc.referrer_addr)), rth.last_updated 
-			  FROM referral_aggr_fees_per_trader rafpt 
-			  JOIN referral_code rc 
+			FROM referral_aggr_fees_per_trader rafpt 
+			JOIN referral_code rc 
 				ON rc.code = rafpt.code
 				AND LOWER(rc.referrer_addr) NOT IN (SELECT LOWER(rc2.child) FROM referral_chain rc2)
-			  LEFT JOIN referral_token_holdings rth 
+			JOIN referral_settings rs 
+				ON rs.broker_id = rc.broker_id 
+				AND rs.property = 'broker_addr'
+			LEFT JOIN referral_token_holdings rth 
 				ON LOWER(rth.referrer_addr) = LOWER(rc.referrer_addr)
-			  WHERE rafpt.broker_id=$1`
+			WHERE rafpt.broker_addr = LOWER(rs.value)
+				and rs.broker_id = $1`
 	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		msg := ("Error getting DbGetActiveReferrers" + err.Error())

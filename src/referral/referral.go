@@ -963,7 +963,7 @@ func (a *App) DbUpdateTokenHoldings() error {
 // (broker-payout address, agent, referrer, trader). If multiple brokers are
 // using this database, then those earnings are aggregated here.
 func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, error) {
-
+	slog.Info(fmt.Sprintf("historic earnings for %s", addr))
 	var history []utils.APIResponseHistEarnings
 	query := `SELECT rp.pool_id, 
 				CASE

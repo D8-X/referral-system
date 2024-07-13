@@ -698,7 +698,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
 
-	query := `SELECT tx_confirmed, broker_addr, block_ts FROM referral_payment 
+	query := `SELECT tx_confirmed, broker_addr, block_nr, block_ts FROM referral_payment 
 			  WHERE lower(trader_addr) = lower($1) 
 			  	AND lower(payee_addr) = lower($2) 
 				AND batch_ts = $3 
@@ -710,7 +710,8 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	var isConfirmed bool
 	var dbBrokerAddr string
 	var utcBlockTimeInDb time.Time
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr, &utcBlockTimeInDb)
+	var blockNr int64
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr, &blockNr, &utcBlockTimeInDb)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment 
@@ -740,7 +741,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	}
 	// we adjust the db entry if (1) it was not confirmed, (2) there is no broker address (legacy),
 	// (3) the block timestamp is zero or null (legacy)
-	if !isConfirmed || dbBrokerAddr == "" || utcBlockTimeInDb.Before(utcBlockTime) {
+	if !isConfirmed || dbBrokerAddr == "" || blockNr == 0 || utcBlockTimeInDb.Before(utcBlockTime) {
 		// set tx confirmed to true
 		query = `UPDATE referral_payment 
 				SET tx_confirmed = true, block_nr = $5, block_ts = $6, broker_addr=$7, block_ts=$8
@@ -748,6 +749,7 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 					AND lower(payee_addr) = lower($2) 
 					AND batch_ts = $3
 					AND level = $4`
+		slog.Info(fmt.Sprintf("updating referral payment db entry at block %d time %s", p.BlockNumber, utcBlockTime.Format(time.RFC3339)))
 		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime, brokerAddr)
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())

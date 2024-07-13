@@ -451,11 +451,13 @@ func (a *App) SavePayments() error {
 	if err != nil {
 		lookBackBlock = 0
 	}
+	slog.Info(fmt.Sprintf("filter payments from block %d", lookBackBlock))
 	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient, lookBackBlock, 0)
 	if err != nil {
 		slog.Error("reading onchain payments aborted with error " + err.Error())
 		return err
 	}
+	slog.Info(fmt.Sprintf("found %d payments to process", len(payments)))
 	for _, p := range payments {
 		// key = trader_addr, payee_addr, pool_id, batch_timestamp
 		traderAddr := p.PayeeAddr[0].String()

@@ -697,7 +697,8 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	brokerAddr := strings.ToLower(p.BrokerAddr)
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
-	query := `SELECT tx_confirmed, broker_addr FROM referral_payment 
+
+	query := `SELECT tx_confirmed, broker_addr, block_ts FROM referral_payment 
 			  WHERE lower(trader_addr) = lower($1) 
 			  	AND lower(payee_addr) = lower($2) 
 				AND batch_ts = $3 
@@ -708,7 +709,8 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	// we fill the table historically with the broker_addr
 	var isConfirmed bool
 	var dbBrokerAddr string
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr)
+	var utcBlockTimeInDb time.Time
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr, &utcBlockTimeInDb)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment 
@@ -732,12 +734,16 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
-	} else if err != nil {
+	}
+	if err != nil {
 		return err
-	} else if !isConfirmed || dbBrokerAddr == "" {
+	}
+	// we adjust the db entry if (1) it was not confirmed, (2) there is no broker address (legacy),
+	// (3) the block timestamp is zero or null (legacy)
+	if !isConfirmed || dbBrokerAddr == "" || utcBlockTimeInDb.Before(utcBlockTime) {
 		// set tx confirmed to true
 		query = `UPDATE referral_payment 
-				SET tx_confirmed = true, block_nr = $5, block_ts = $6, broker_addr=$7
+				SET tx_confirmed = true, block_nr = $5, block_ts = $6, broker_addr=$7, block_ts=$8
 				WHERE lower(trader_addr) = lower($1) 
 					AND lower(payee_addr) = lower($2) 
 					AND batch_ts = $3

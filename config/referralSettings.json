@@ -101,5 +101,34 @@
       "address": "0x2f8cDc8383ba7f60f005e8eA8214796523da7Faa",
       "decimals": 18
     }
+  },
+  {
+    "brokerId": "d8xTest",
+    "brokerPayoutAddr": "0xdefe1f5c1dd521f216c4435212fda4b112965999",
+    "chainId": 42161,
+    "paymentMaxLookBackDays": 14,
+    "paymentScheduleCron": "0 08 * * *",
+    "referrerCutPercentForTokenXHolding": [
+      [
+        0.2,
+        0
+      ],
+      [
+        1.5,
+        100
+      ],
+      [
+        2.5,
+        1000
+      ],
+      [
+        3.75,
+        10000
+      ]
+    ],
+    "tokenX": {
+      "address": "0xDc28023CCdfbE553643c41A335a4F555Edf937Df",
+      "decimals": 18
+    }
   }
 ]

@@ -219,7 +219,8 @@ func (a *App) ManagePayments() {
 		a.SchedulePayment()
 		return
 	}
-	slog.Info("Reading onchain payments completed")
+	slog.Info("Reading onchain payments completed, purging unconfirmed payments")
+	a.PurgeUnconfirmedPayments(nil)
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
 	a.PaymentExecutor.NewTokenBucket(5, 3)
 	// determine batch timestamp

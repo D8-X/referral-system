@@ -449,7 +449,7 @@ func (a *App) SavePayments() error {
 	tsStart := time.Now().Unix() - int64(a.Settings.PaymentMaxLookBackDays*86400)
 	lookBackBlock, _, err := contracts.FindBlockWithTs(a.RpcClient, uint64(tsStart))
 	if err != nil {
-		lookBackBlock = 0
+		return err
 	}
 	slog.Info(fmt.Sprintf("filter payments from block %d", lookBackBlock))
 	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient, lookBackBlock, 0)

@@ -464,7 +464,10 @@ func (a *App) SavePayments() error {
 		for k, payee := range p.PayeeAddr {
 			result := p.AmountDecN[k].Cmp(big.NewInt(0))
 			if result != 0 {
-				a.writeDbPayment(traderAddr, payee.String(), p, k)
+				err := a.writeDbPayment(traderAddr, payee.String(), p, k)
+				if err != nil {
+					slog.Error(err.Error())
+				}
 			}
 		}
 
@@ -711,9 +714,10 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	// we fill the table historically with the broker_addr
 	var isConfirmed bool
 	var dbBrokerAddr string
-	var utcBlockTimeInDb time.Time
+	var utcBlockTimeDb time.Time
+	var blockNrDb sql.NullInt64
 	var blockNr int64
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr, &blockNr, &utcBlockTimeInDb)
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr, &blockNrDb, &utcBlockTimeDb)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment 
@@ -741,20 +745,23 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	if err != nil {
 		return err
 	}
+	if blockNrDb.Valid {
+		blockNr = blockNrDb.Int64
+	}
 	// we adjust the db entry if (1) it was not confirmed, (2) there is no broker address (legacy),
 	// (3) the block timestamp is zero or null (legacy)
-	if !isConfirmed || dbBrokerAddr == "" || blockNr == 0 || utcBlockTimeInDb.Before(utcBlockTime) {
+	if !isConfirmed || dbBrokerAddr == "" || blockNr == 0 || utcBlockTimeDb.Before(utcBlockTime) {
 		// set tx confirmed to true
 		query = `UPDATE referral_payment 
-				SET tx_confirmed = true, block_nr = $5, block_ts = $6, broker_addr=$7, block_ts=$8
+				SET tx_confirmed = true, block_nr = $5, block_ts = $6, broker_addr=$7
 				WHERE lower(trader_addr) = lower($1) 
 					AND lower(payee_addr) = lower($2) 
 					AND batch_ts = $3
 					AND level = $4`
-		slog.Info(fmt.Sprintf("updating referral payment db entry at block %d time %s", p.BlockNumber, utcBlockTime.Format(time.RFC3339)))
+		fmt.Printf("updating referral payment db entry at block %d time %s\n", p.BlockNumber, utcBlockTime.Format(time.RFC3339))
 		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime, brokerAddr)
 		if err != nil {
-			return errors.New("Failed to insert data: " + err.Error())
+			return errors.New("failed to insert data: " + err.Error())
 		}
 	}
 	return nil

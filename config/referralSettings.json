@@ -107,7 +107,7 @@
     "brokerPayoutAddr": "0xdefe1f5c1dd521f216c4435212fda4b112965999",
     "chainId": 42161,
     "paymentMaxLookBackDays": 14,
-    "paymentScheduleCron": "0 08 * * *",
+    "paymentScheduleCron": "0 08 * * 3",
     "referrerCutPercentForTokenXHolding": [
       [
         0.2,

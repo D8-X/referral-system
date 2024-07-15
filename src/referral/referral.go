@@ -483,8 +483,12 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 					code, level, pool_id, batch_ts, paid_amount_cc, 
 					tx_hash, block_ts
 				FROM referral_payment rp 
-				WHERE tx_confirmed = false;`
-	rows, err := a.Db.Query(query)
+				join referral_settings rs 
+				ON rs.property = 'broker_addr'
+				AND rs.broker_id = $1
+				AND lower(rs.value) = lower(rp.broker_addr)
+				WHERE tx_confirmed = false`
+	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		return err
 	}

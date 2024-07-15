@@ -985,8 +985,24 @@ func (a *App) DbUpdateTokenHoldings() error {
 // using this database, then those earnings are aggregated here.
 func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, error) {
 	slog.Info(fmt.Sprintf("historic earnings for %s", addr))
+	// since when do we have earnings recorded in the db?
+	query := `SELECT min(rp.block_ts) AS since
+				FROM referral_payment rp
+				join referral_settings rs
+				ON rs.property='broker_addr'
+				AND rs.broker_id=$1 AND
+				lower(rp.broker_addr) = lower(rs.value)`
+	var since time.Time
+	var sinceStr string
+	err := a.Db.QueryRow(query, a.Settings.BrokerId).Scan(&since)
+	if err != nil {
+		slog.Info("historic earning since query:" + err.Error())
+	} else {
+		sinceStr = since.Format("2006-01-02 15:04:05")
+	}
+
 	var history []utils.APIResponseHistEarnings
-	query := `SELECT rp.pool_id, 
+	query = `SELECT rp.pool_id, 
 				CASE
 					WHEN rp.trader_addr = rp.payee_addr THEN 1 -- True if trader_addr is equal to payee_addr
 					ELSE 0 -- False otherwise
@@ -1007,8 +1023,10 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 	var el utils.APIResponseHistEarnings
 	for rows.Next() {
 		rows.Scan(&el.PoolId, &el.AsTrader, &el.Code, &el.Earnings, &el.TokenName)
+		el.Since = sinceStr
 		history = append(history, el)
 	}
+
 	return history, nil
 }
 

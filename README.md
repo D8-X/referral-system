@@ -127,26 +127,32 @@ for traders (asTrader=true), and earnings due to being a referrer/agency.
       "code": "DEFAULT",
       "earnings": 84.5672473711144,
       "asTrader": false,
-      "tokenName": "MATIC"
+      "tokenName": "MATIC",
+      "since": "2024-07-11 16:24:55"
     },
     {
       "poolId": 2,
       "code": "DEFAULT",
       "earnings": 94.731112,
       "asTrader": false,
-      "tokenName": "USDC"
+      "tokenName": "USDC",
+      "since": "2024-07-11 16:24:55"
     },
     {
       "poolId": 2,
       "code": "DEFAULT",
       "earnings": 0.603999,
       "asTrader": true,
-      "tokenName": "USDC"
+      "tokenName": "USDC",
+      "since": "2024-07-11 16:24:55"
     }
   ]
 }
 ```
 ## Get request: open payments for traders
+
+Traders that are using a referral code get broker-fee rebates when trading via broker.
+This endpoint shows how much fees the trader will be paid. 
 
 http://127.0.0.1:8000/open-pay?traderAddr=0x85ded23c7bc09ae051bf83eb1cd91a90fae37366
 

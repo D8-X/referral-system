@@ -1,4 +1,5 @@
 -- Drop the existing view
+DROP VIEW IF EXISTS referral_aggr_fees_per_trader;
 DROP VIEW IF EXISTS referral_last_payment;
 -- tx_confirmed only considered since now - paymentlookbackdays
 

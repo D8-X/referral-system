@@ -10,7 +10,7 @@ import (
 
 func TestFindBlockBefore(t *testing.T) {
 	var rpc *ethclient.Client
-	url := "https://rpc.public.zkevm-test.net"
+	url := "https://arbitrum.llamarpc.com" //"https://rpc.public.zkevm-test.net"
 	rpc, err := ethclient.Dial(url)
 	if err != nil {
 		t.Fail()

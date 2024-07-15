@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net"
 	"net/http"
 	"referral-system/src/referral"
@@ -12,7 +11,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-func StartApiServer(app *referral.App, host string, port string, wg *sync.WaitGroup) error {
+func StartApiServer(app *referral.App, host string, port string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	router := chi.NewRouter()
 	RegisterGlobalMiddleware(router)
@@ -27,7 +26,7 @@ func StartApiServer(app *referral.App, host string, port string, wg *sync.WaitGr
 		addr,
 		router,
 	)
-	return errors.New("api server is shutting down" + err.Error())
+	slog.Error("api server is shutting down: " + err.Error())
 }
 
 func formatError(errorMsg string) []byte {

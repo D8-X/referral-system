@@ -36,6 +36,7 @@ type APIResponseHistEarnings struct {
 	Earnings  float64 `json:"earnings"`
 	AsTrader  bool    `json:"asTrader"`
 	TokenName string  `json:"tokenName"`
+	Since     string  `json:"since"`
 }
 
 type OpenPay struct {

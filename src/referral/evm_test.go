@@ -1,6 +1,7 @@
 package referral
 
 import (
+	"fmt"
 	"log"
 	"testing"
 
@@ -32,4 +33,14 @@ func TestGetTransactionReceipt(t *testing.T) {
 		t.Errorf("tx 'not found' failed")
 	}
 
+}
+func TestGetBlockTimestamp(t *testing.T) {
+	var rpc *ethclient.Client
+	url := "https://arbitrum.llamarpc.com" //"https://rpc.public.zkevm-test.net"
+	rpc, err := ethclient.Dial(url)
+	if err != nil {
+		t.Fail()
+	}
+	bts := getBlockTimestamp(225501346, rpc)
+	fmt.Printf("block ts = %d", bts)
 }

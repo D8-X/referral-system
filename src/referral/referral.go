@@ -449,20 +449,25 @@ func (a *App) SavePayments() error {
 	tsStart := time.Now().Unix() - int64(a.Settings.PaymentMaxLookBackDays*86400)
 	lookBackBlock, _, err := contracts.FindBlockWithTs(a.RpcClient, uint64(tsStart))
 	if err != nil {
-		lookBackBlock = 0
+		return err
 	}
+	slog.Info(fmt.Sprintf("filter payments from block %d", lookBackBlock))
 	payments, err := FilterPayments(a.MultipayCtrct, a.RpcClient, lookBackBlock, 0)
 	if err != nil {
 		slog.Error("reading onchain payments aborted with error " + err.Error())
 		return err
 	}
+	slog.Info(fmt.Sprintf("found %d payments to process", len(payments)))
 	for _, p := range payments {
 		// key = trader_addr, payee_addr, pool_id, batch_timestamp
 		traderAddr := p.PayeeAddr[0].String()
 		for k, payee := range p.PayeeAddr {
 			result := p.AmountDecN[k].Cmp(big.NewInt(0))
 			if result != 0 {
-				a.writeDbPayment(traderAddr, payee.String(), p, k)
+				err := a.writeDbPayment(traderAddr, payee.String(), p, k)
+				if err != nil {
+					slog.Error(err.Error())
+				}
 			}
 		}
 
@@ -478,8 +483,12 @@ func (a *App) PurgeUnconfirmedPayments(txs []string) error {
 					code, level, pool_id, batch_ts, paid_amount_cc, 
 					tx_hash, block_ts
 				FROM referral_payment rp 
-				WHERE tx_confirmed = false;`
-	rows, err := a.Db.Query(query)
+				join referral_settings rs 
+				ON rs.property = 'broker_addr'
+				AND rs.broker_id = $1
+				AND lower(rs.value) = lower(rp.broker_addr)
+				WHERE tx_confirmed = false`
+	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		return err
 	}
@@ -697,7 +706,8 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	brokerAddr := strings.ToLower(p.BrokerAddr)
 	utcBatchTime := time.Unix(int64(p.BatchTimestamp), 0)
 	utcBlockTime := time.Unix(int64(p.BlockTs), 0)
-	query := `SELECT tx_confirmed, broker_addr FROM referral_payment 
+
+	query := `SELECT tx_confirmed, broker_addr, block_nr, block_ts FROM referral_payment 
 			  WHERE lower(trader_addr) = lower($1) 
 			  	AND lower(payee_addr) = lower($2) 
 				AND batch_ts = $3 
@@ -708,7 +718,10 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 	// we fill the table historically with the broker_addr
 	var isConfirmed bool
 	var dbBrokerAddr string
-	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr)
+	var utcBlockTimeDb time.Time
+	var blockNrDb sql.NullInt64
+	var blockNr int64
+	err := a.Db.QueryRow(query, traderAddr, payeeAddr, utcBatchTime, p.PoolId, payIdx).Scan(&isConfirmed, &dbBrokerAddr, &blockNrDb, &utcBlockTimeDb)
 	if err == sql.ErrNoRows {
 		// insert
 		query = `INSERT INTO referral_payment 
@@ -732,9 +745,16 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 		if err != nil {
 			return errors.New("Failed to insert data: " + err.Error())
 		}
-	} else if err != nil {
+	}
+	if err != nil {
 		return err
-	} else if !isConfirmed || dbBrokerAddr == "" {
+	}
+	if blockNrDb.Valid {
+		blockNr = blockNrDb.Int64
+	}
+	// we adjust the db entry if (1) it was not confirmed, (2) there is no broker address (legacy),
+	// (3) the block timestamp is zero or null (legacy)
+	if !isConfirmed || dbBrokerAddr == "" || blockNr == 0 || utcBlockTimeDb.Before(utcBlockTime) {
 		// set tx confirmed to true
 		query = `UPDATE referral_payment 
 				SET tx_confirmed = true, block_nr = $5, block_ts = $6, broker_addr=$7
@@ -742,9 +762,10 @@ func (a *App) writeDbPayment(traderAddr string, payeeAddr string, p PaymentLog, 
 					AND lower(payee_addr) = lower($2) 
 					AND batch_ts = $3
 					AND level = $4`
+		fmt.Printf("updating referral payment db entry at block %d time %s\n", p.BlockNumber, utcBlockTime.Format(time.RFC3339))
 		_, err := a.Db.Exec(query, traderAddr, payeeAddr, utcBatchTime, payIdx, p.BlockNumber, utcBlockTime, brokerAddr)
 		if err != nil {
-			return errors.New("Failed to insert data: " + err.Error())
+			return errors.New("failed to insert data: " + err.Error())
 		}
 	}
 	return nil
@@ -963,9 +984,25 @@ func (a *App) DbUpdateTokenHoldings() error {
 // (broker-payout address, agent, referrer, trader). If multiple brokers are
 // using this database, then those earnings are aggregated here.
 func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, error) {
+	slog.Info(fmt.Sprintf("historic earnings for %s", addr))
+	// since when do we have earnings recorded in the db?
+	query := `SELECT min(rp.block_ts) AS since
+				FROM referral_payment rp
+				join referral_settings rs
+				ON rs.property='broker_addr'
+				AND rs.broker_id=$1 AND
+				lower(rp.broker_addr) = lower(rs.value)`
+	var since time.Time
+	var sinceStr string
+	err := a.Db.QueryRow(query, a.Settings.BrokerId).Scan(&since)
+	if err != nil {
+		slog.Info("historic earning since query:" + err.Error())
+	} else {
+		sinceStr = since.Format("2006-01-02 15:04:05")
+	}
 
 	var history []utils.APIResponseHistEarnings
-	query := `SELECT rp.pool_id, 
+	query = `SELECT rp.pool_id, 
 				CASE
 					WHEN rp.trader_addr = rp.payee_addr THEN 1 -- True if trader_addr is equal to payee_addr
 					ELSE 0 -- False otherwise
@@ -986,8 +1023,10 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 	var el utils.APIResponseHistEarnings
 	for rows.Next() {
 		rows.Scan(&el.PoolId, &el.AsTrader, &el.Code, &el.Earnings, &el.TokenName)
+		el.Since = sinceStr
 		history = append(history, el)
 	}
+
 	return history, nil
 }
 
@@ -997,13 +1036,17 @@ func (a *App) HistoricEarnings(addr string) ([]utils.APIResponseHistEarnings, er
 // token balance update time
 func (a *App) DbGetActiveReferrers() ([]string, []time.Time, error) {
 	query := `SELECT distinct(lower(rc.referrer_addr)), rth.last_updated 
-			  FROM referral_aggr_fees_per_trader rafpt 
-			  JOIN referral_code rc 
+			FROM referral_aggr_fees_per_trader rafpt 
+			JOIN referral_code rc 
 				ON rc.code = rafpt.code
 				AND LOWER(rc.referrer_addr) NOT IN (SELECT LOWER(rc2.child) FROM referral_chain rc2)
-			  LEFT JOIN referral_token_holdings rth 
+			JOIN referral_settings rs 
+				ON rs.broker_id = rc.broker_id 
+				AND rs.property = 'broker_addr'
+			LEFT JOIN referral_token_holdings rth 
 				ON LOWER(rth.referrer_addr) = LOWER(rc.referrer_addr)
-			  WHERE rafpt.broker_id=$1`
+			WHERE rafpt.broker_addr = LOWER(rs.value)
+				and rs.broker_id = $1`
 	rows, err := a.Db.Query(query, a.Settings.BrokerId)
 	if err != nil {
 		msg := ("Error getting DbGetActiveReferrers" + err.Error())

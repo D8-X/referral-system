@@ -132,7 +132,7 @@ func FilterPayments(ctrct *contracts.MultiPay, client *ethclient.Client, startBl
 
 	header, err := client.HeaderByNumber(context.Background(), nil)
 	if err != nil {
-		return []PaymentLog{}, errors.New("Failed to get block hgeader: " + err.Error())
+		return []PaymentLog{}, errors.New("Failed to get block header: " + err.Error())
 	}
 	nowBlock := header.Number.Uint64()
 	var bucketCapacity int = 15
@@ -295,7 +295,7 @@ func processMultiPayEvents(client *ethclient.Client, multiPayPaymentIterator *co
 func getBlockTimestamp(blockNum uint64, client *ethclient.Client) uint64 {
 	var b big.Int
 	b.SetUint64(blockNum)
-	block, err := client.BlockByNumber(context.Background(), &b)
+	block, err := contracts.BlockByNumberL2Compat(client, context.Background(), &b)
 	if err == nil {
 		return block.Time()
 	} else {

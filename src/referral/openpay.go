@@ -37,6 +37,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 		TokenName           string
 		TokenDecimals       uint8
 	}
+	slog.Info(fmt.Sprintf("openPay trader %s broker %s", traderAddr, a.Settings.BrokerId))
 	// get aggregated fees per pool and associated margin token info
 	// for the given trader
 	query := `SELECT 
@@ -52,6 +53,7 @@ func (a *App) OpenPay(traderAddr string) (utils.APIResponseOpenEarnings, error) 
 			WHERE LOWER(trader_addr)=$1
 				AND LOWER(rs.value) = LOWER(rafpt.broker_addr)`
 	rows, err := a.Db.Query(query, traderAddr, a.Settings.BrokerId)
+
 	if err != nil {
 		slog.Error("Error for open pay" + err.Error())
 		return utils.APIResponseOpenEarnings{}, errors.New("unable to query payment")
@@ -217,7 +219,8 @@ func (a *App) ManagePayments() {
 		a.SchedulePayment()
 		return
 	}
-	slog.Info("Reading onchain payments completed")
+	slog.Info("Reading onchain payments completed, purging unconfirmed payments")
+	a.PurgeUnconfirmedPayments(nil)
 	// Create a token bucket with a limit of 5 tokens and a refill rate of 3 tokens per second
 	a.PaymentExecutor.NewTokenBucket(5, 3)
 	// determine batch timestamp

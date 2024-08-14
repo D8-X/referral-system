@@ -97,6 +97,10 @@ func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address,
 // RecoverReferralSigAddr recovers the address of a signed APIReferPayload
 // which is sent when an agency/broker wants to pass on their referral
 func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
+	// // Hash the unsigned message using EIP-715
+	// typedDataHash, _ := signerData.HashStruct("NewReferral", rpl without signature)
+	// send string(typedDataHash) to recoverEvmAddress, if that fails send digest below
+
 	digestBytes32, err := GetReferralDigest(rpl)
 	if err != nil {
 		return common.Address{}, err
@@ -131,6 +135,19 @@ func bytesFromHexString(hexNumber string) ([]byte, error) {
 }
 
 func recoverEvmAddress(data string, signature string) (common.Address, error) {
+	addr, err := recoverEvmAddressEip715(data, signature)
+	if err == nil {
+		return addr, nil
+	}
+
+	addr, err = recoverEvmAddressEip191(data, signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return addr, nil
+}
+
+func recoverEvmAddressEip191(data string, signature string) (common.Address, error) {
 	// Hash the unsigned message using EIP-191
 	hashedMessage := []byte("\x19Ethereum Signed Message:\n" + strconv.Itoa(len(data)) + data)
 	hash := crypto.Keccak256Hash(hashedMessage)
@@ -143,12 +160,41 @@ func recoverEvmAddress(data string, signature string) (common.Address, error) {
 	// Recover a public key from the signed message
 	sigPublicKeyECDSA, err := crypto.SigToPub(hash.Bytes(), decodedMessage)
 	if sigPublicKeyECDSA == nil {
-		err = errors.New("Could not get a public get from the message signature")
+		err = errors.New("could not get a public get from the message signature")
 	}
 	if err != nil {
 		return common.Address{}, err
 	}
 	addr := crypto.PubkeyToAddress(*sigPublicKeyECDSA)
+	return addr, nil
+}
+
+func recoverEvmAddressEip715(data string, signature string) (common.Address, error) {
+	domainSeparator := "" // HashStruct("EIP712Domain", nil), a constant
+
+	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), data))
+	hash := crypto.Keccak256Hash(rawData)
+
+	decodedMessage := hexutil.MustDecode(signature)
+	// Handles cases where EIP-115 is not implemented (most wallets don't implement it)
+	if decodedMessage[64] == 27 || decodedMessage[64] == 28 {
+		decodedMessage[64] -= 27
+	}
+	// Recover a public key from the signed message
+	pubKeyRaw, err := crypto.Ecrecover(hash.Bytes(), decodedMessage)
+	if pubKeyRaw == nil {
+		err = errors.New("could not get a public key from the message signature")
+	}
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	pubKey, err := crypto.UnmarshalPubkey(pubKeyRaw)
+
+	if err != nil {
+		return common.Address{}, err
+	}
+	addr := crypto.PubkeyToAddress(*pubKey)
 	return addr, nil
 }
 

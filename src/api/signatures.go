@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	solsha3 "github.com/miguelmota/go-solidity-sha3"
 )
 
@@ -83,11 +84,40 @@ func GetCodeDigest(rpl utils.APICodePayload) ([32]byte, error) {
 // RecoverCodeSelectSigAddr recovers the address of a signed APICodeSelectionPayload
 // which is sent when a trader selects their code
 func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address, error) {
+	// Hash the unsigned message using EIP-715
+	typedData := apitypes.TypedData{
+		Types: apitypes.Types{
+			"CodeSelect": []apitypes.Type{
+				{Name: "Code", Type: "string"},
+				{Name: "TraderAddr", Type: "address"},
+				{Name: "CreatedOn", Type: "uint256"},
+			},
+		},
+		Message: apitypes.TypedDataMessage{
+			"Code":       ps.Code,
+			"TraderAddr": ps.TraderAddr,
+			"CreatedOn":  ps.CreatedOn,
+		},
+		PrimaryType: "CodeSelect",
+	}
+
+	typedDataHash, err := typedData.HashStruct("CodeSelect", typedData.Message)
+	if err != nil {
+		return common.Address{}, err
+	}
+	// try to recover
+	addr, err := recoverEvmAddressEip715(string(typedDataHash), ps.Signature)
+
+	if err == nil {
+		return addr, err
+	}
+
+	// recovery using EIP-715 failed - try EIP-191
 	digestBytes32, err := GetCodeSelectionDigest(ps)
 	if err != nil {
 		return common.Address{}, err
 	}
-	addr, err := recoverEvmAddress(string(digestBytes32[:]), ps.Signature)
+	addr, err = recoverEvmAddressEip191(string(digestBytes32[:]), ps.Signature)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -97,15 +127,42 @@ func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address,
 // RecoverReferralSigAddr recovers the address of a signed APIReferPayload
 // which is sent when an agency/broker wants to pass on their referral
 func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
-	// // Hash the unsigned message using EIP-715
-	// typedDataHash, _ := signerData.HashStruct("NewReferral", rpl without signature)
-	// send string(typedDataHash) to recoverEvmAddress, if that fails send digest below
+	// Hash the unsigned message using EIP-715
+	typedData := apitypes.TypedData{
+		Types: apitypes.Types{
+			"NewReferral": []apitypes.Type{
+				{Name: "ParentAddr", Type: "address"},
+				{Name: "ReferToAddr", Type: "address"},
+				{Name: "PassOnPercTDF", Type: "uint32"},
+				{Name: "CreatedOn", Type: "uint256"},
+			},
+		},
+		Message: apitypes.TypedDataMessage{
+			"ParentAddr":    rpl.ParentAddr,
+			"ReferToAddr":   rpl.ReferToAddr,
+			"PassOnPercTDF": rpl.PassOnPercTDF,
+			"CreatedOn":     rpl.CreatedOn,
+		},
+		PrimaryType: "NewReferral",
+	}
 
+	typedDataHash, err := typedData.HashStruct("NewReferral", typedData.Message)
+	if err != nil {
+		return common.Address{}, err
+	}
+	// try to recover
+	addr, err := recoverEvmAddressEip715(string(typedDataHash), rpl.Signature)
+
+	if err == nil {
+		return addr, err
+	}
+
+	// recovery using EIP-715 failed - try EIP-191
 	digestBytes32, err := GetReferralDigest(rpl)
 	if err != nil {
 		return common.Address{}, err
 	}
-	addr, err := recoverEvmAddress(string(digestBytes32[:]), rpl.Signature)
+	addr, err = recoverEvmAddressEip191(string(digestBytes32[:]), rpl.Signature)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -115,11 +172,42 @@ func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
 // RecoverCodeSigAddr recovers the address of a signed APICodePayload
 // which is sent when a referrer creates their code
 func RecoverCodeSigAddr(cp utils.APICodePayload) (common.Address, error) {
+	// Hash the unsigned message using EIP-715
+	typedData := apitypes.TypedData{
+		Types: apitypes.Types{
+			"NewCode": []apitypes.Type{
+				{Name: "Code", Type: "string"},
+				{Name: "ReferrerAddr", Type: "address"},
+				{Name: "PassOnPercTDF", Type: "uint32"},
+				{Name: "CreatedOn", Type: "uint256"},
+			},
+		},
+		Message: apitypes.TypedDataMessage{
+			"Code":          cp.Code,
+			"ReferrerAddr":  cp.ReferrerAddr,
+			"PassOnPercTDF": cp.PassOnPercTDF,
+			"CreatedOn":     cp.CreatedOn,
+		},
+		PrimaryType: "NewCode",
+	}
+
+	typedDataHash, err := typedData.HashStruct("NewCode", typedData.Message)
+	if err != nil {
+		return common.Address{}, err
+	}
+	// try to recover
+	addr, err := recoverEvmAddressEip715(string(typedDataHash), cp.Signature)
+
+	if err == nil {
+		return addr, err
+	}
+
+	// recovery using EIP-715 failed - try EIP-191
 	digestBytes32, err := GetCodeDigest(cp)
 	if err != nil {
 		return common.Address{}, err
 	}
-	addr, err := recoverEvmAddress(string(digestBytes32[:]), cp.Signature)
+	addr, err = recoverEvmAddressEip191(string(digestBytes32[:]), cp.Signature)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -134,18 +222,17 @@ func bytesFromHexString(hexNumber string) ([]byte, error) {
 	return data, nil
 }
 
-func recoverEvmAddress(data string, signature string) (common.Address, error) {
-	addr, err := recoverEvmAddressEip715(data, signature)
-	if err == nil {
-		return addr, nil
-	}
-
-	addr, err = recoverEvmAddressEip191(data, signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	return addr, nil
-}
+// func recoverEvmAddress(data string, signature string) (common.Address, error) {
+// 	addr, err := recoverEvmAddressEip715(data, signature)
+// 	if err == nil {
+// 		return addr, nil
+// 	}
+// 	addr, err = recoverEvmAddressEip191(data, signature)
+// 	if err != nil {
+// 		return common.Address{}, err
+// 	}
+// 	return addr, nil
+// }
 
 func recoverEvmAddressEip191(data string, signature string) (common.Address, error) {
 	// Hash the unsigned message using EIP-191
@@ -170,7 +257,8 @@ func recoverEvmAddressEip191(data string, signature string) (common.Address, err
 }
 
 func recoverEvmAddressEip715(data string, signature string) (common.Address, error) {
-	domainSeparator := "" // HashStruct("EIP712Domain", nil), a constant
+	typedDataDomain := apitypes.TypedData{}
+	domainSeparator, _ := typedDataDomain.HashStruct("EIP712Domain", nil) // not used
 
 	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), data))
 	hash := crypto.Keccak256Hash(rawData)

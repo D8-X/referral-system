@@ -34,7 +34,7 @@ func GetCodeSelectionDigest(rc utils.APICodeSelectionPayload) ([32]byte, error) 
 }
 
 func GetCodeSelectionTypedDataHash(ps utils.APICodeSelectionPayload) ([]byte, error) {
-	// Hash the unsigned message using EIP-715
+	// Hash the unsigned message using EIP-712
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
 			"CodeSelection": []apitypes.Type{
@@ -94,7 +94,7 @@ func GetReferralDigest(rpl utils.APIReferPayload) ([32]byte, error) {
 }
 
 func GetReferralTypedDataHash(rpl utils.APIReferPayload) ([]byte, error) {
-	// Hash the unsigned message using EIP-715
+	// Hash the unsigned message using EIP-712
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
 			"NewReferral": []apitypes.Type{
@@ -137,7 +137,7 @@ func GetCodeDigest(rpl utils.APICodePayload) ([32]byte, error) {
 }
 
 func GetCodeTypedDataHash(cp utils.APICodePayload) ([]byte, error) {
-	// Hash the unsigned message using EIP-715
+	// Hash the unsigned message using EIP-712
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
 			"NewCode": []apitypes.Type{
@@ -178,7 +178,7 @@ func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address,
 		return addr, err
 	}
 
-	// recovery using EIP-715 failed - try EIP-191
+	// recovery using EIP-712 failed - try EIP-191
 	digestBytes32, err := GetCodeSelectionDigest(ps)
 	if err != nil {
 		return common.Address{}, err
@@ -204,7 +204,7 @@ func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
 		return addr, err
 	}
 
-	// recovery using EIP-715 failed - try EIP-191
+	// recovery using EIP-712 failed - try EIP-191
 	digestBytes32, err := GetReferralDigest(rpl)
 	if err != nil {
 		return common.Address{}, err
@@ -230,7 +230,7 @@ func RecoverCodeSigAddr(cp utils.APICodePayload) (common.Address, error) {
 		return addr, err
 	}
 
-	// recovery using EIP-715 failed - try EIP-191
+	// recovery using EIP-712 failed - try EIP-191
 	digestBytes32, err := GetCodeDigest(cp)
 	if err != nil {
 		return common.Address{}, err
@@ -251,7 +251,7 @@ func bytesFromHexString(hexNumber string) ([]byte, error) {
 }
 
 // func recoverEvmAddress(data string, signature string) (common.Address, error) {
-// 	addr, err := recoverEvmAddressEip715(data, signature)
+// 	addr, err := recoverEvmAddressEip712(data, signature)
 // 	if err == nil {
 // 		return addr, nil
 // 	}

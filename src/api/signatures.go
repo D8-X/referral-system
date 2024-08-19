@@ -33,6 +33,32 @@ func GetCodeSelectionDigest(rc utils.APICodeSelectionPayload) ([32]byte, error) 
 	return digestBytes32, nil
 }
 
+func GetCodeSelectionTypedData(ps utils.APICodeSelectionPayload) ([]byte, error) {
+	// Hash the unsigned message using EIP-715
+	typedData := apitypes.TypedData{
+		Types: apitypes.Types{
+			"CodeSelect": []apitypes.Type{
+				{Name: "Code", Type: "string"},
+				{Name: "TraderAddr", Type: "address"},
+				{Name: "CreatedOn", Type: "uint256"},
+			},
+			"EIP712Domain": []apitypes.Type{
+				{Name: "name", Type: "string"},
+			},
+		},
+		PrimaryType: "CodeSelect",
+		Domain: apitypes.TypedDataDomain{
+			Name: "Referral System",
+		},
+		Message: apitypes.TypedDataMessage{
+			"Code":       ps.Code,
+			"TraderAddr": ps.TraderAddr,
+			"CreatedOn":  big.NewInt(int64(ps.CreatedOn)),
+		},
+	}
+	return typedData.HashStruct("CodeSelect", typedData.Message)
+}
+
 func isValidEvmAddr(addr string) bool {
 	// Define a regular expression pattern for Ethereum addresses
 	// It should start with "0x" followed by 40 hexadecimal characters
@@ -110,33 +136,38 @@ func GetCodeDigest(rpl utils.APICodePayload) ([32]byte, error) {
 	return digestBytes32, nil
 }
 
-// RecoverCodeSelectSigAddr recovers the address of a signed APICodeSelectionPayload
-// which is sent when a trader selects their code
-func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address, error) {
+func GetCodeTypedData(cp utils.APICodePayload) ([]byte, error) {
 	// Hash the unsigned message using EIP-715
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
-			"CodeSelect": []apitypes.Type{
+			"NewCode": []apitypes.Type{
 				{Name: "Code", Type: "string"},
-				{Name: "TraderAddr", Type: "address"},
+				{Name: "ReferrerAddr", Type: "address"},
+				{Name: "PassOnPercTDF", Type: "uint32"},
 				{Name: "CreatedOn", Type: "uint256"},
 			},
 			"EIP712Domain": []apitypes.Type{
 				{Name: "name", Type: "string"},
 			},
 		},
-		PrimaryType: "CodeSelect",
 		Domain: apitypes.TypedDataDomain{
 			Name: "Referral System",
 		},
 		Message: apitypes.TypedDataMessage{
-			"Code":       ps.Code,
-			"TraderAddr": ps.TraderAddr,
-			"CreatedOn":  big.NewInt(int64(ps.CreatedOn)),
+			"Code":          cp.Code,
+			"ReferrerAddr":  cp.ReferrerAddr,
+			"PassOnPercTDF": big.NewInt(int64(cp.PassOnPercTDF)),
+			"CreatedOn":     big.NewInt(int64(cp.CreatedOn)),
 		},
+		PrimaryType: "NewCode",
 	}
+	return typedData.HashStruct("NewCode", typedData.Message)
+}
 
-	typedDataHash, err := typedData.HashStruct("CodeSelect", typedData.Message)
+// RecoverCodeSelectSigAddr recovers the address of a signed APICodeSelectionPayload
+// which is sent when a trader selects their code
+func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address, error) {
+	typedDataHash, err := GetCodeSelectionTypedData(ps)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -162,32 +193,7 @@ func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address,
 // RecoverReferralSigAddr recovers the address of a signed APIReferPayload
 // which is sent when an agency/broker wants to pass on their referral
 func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
-	// Hash the unsigned message using EIP-712
-	typedData := apitypes.TypedData{
-		Types: apitypes.Types{
-			"NewReferral": []apitypes.Type{
-				{Name: "ParentAddr", Type: "address"},
-				{Name: "ReferToAddr", Type: "address"},
-				{Name: "PassOnPercTDF", Type: "uint32"},
-				{Name: "CreatedOn", Type: "uint256"},
-			},
-			"EIP712Domain": []apitypes.Type{
-				{Name: "name", Type: "string"},
-			},
-		},
-		Domain: apitypes.TypedDataDomain{
-			Name: "Referral System",
-		},
-		Message: apitypes.TypedDataMessage{
-			"ParentAddr":    rpl.ParentAddr,
-			"ReferToAddr":   rpl.ReferToAddr,
-			"PassOnPercTDF": big.NewInt(int64(rpl.PassOnPercTDF)),
-			"CreatedOn":     big.NewInt(int64(rpl.CreatedOn)),
-		},
-		PrimaryType: "NewReferral",
-	}
-
-	typedDataHash, err := typedData.HashStruct("NewReferral", typedData.Message)
+	typedDataHash, err := GetReferralTypedData(rpl)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -213,32 +219,7 @@ func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
 // RecoverCodeSigAddr recovers the address of a signed APICodePayload
 // which is sent when a referrer creates their code
 func RecoverCodeSigAddr(cp utils.APICodePayload) (common.Address, error) {
-	// Hash the unsigned message using EIP-715
-	typedData := apitypes.TypedData{
-		Types: apitypes.Types{
-			"NewCode": []apitypes.Type{
-				{Name: "Code", Type: "string"},
-				{Name: "ReferrerAddr", Type: "address"},
-				{Name: "PassOnPercTDF", Type: "uint32"},
-				{Name: "CreatedOn", Type: "uint256"},
-			},
-			"EIP712Domain": []apitypes.Type{
-				{Name: "name", Type: "string"},
-			},
-		},
-		Domain: apitypes.TypedDataDomain{
-			Name: "Referral System",
-		},
-		Message: apitypes.TypedDataMessage{
-			"Code":          cp.Code,
-			"ReferrerAddr":  cp.ReferrerAddr,
-			"PassOnPercTDF": big.NewInt(int64(cp.PassOnPercTDF)),
-			"CreatedOn":     big.NewInt(int64(cp.CreatedOn)),
-		},
-		PrimaryType: "NewCode",
-	}
-
-	typedDataHash, err := typedData.HashStruct("NewCode", typedData.Message)
+	typedDataHash, err := GetCodeTypedData(cp)
 	if err != nil {
 		return common.Address{}, err
 	}

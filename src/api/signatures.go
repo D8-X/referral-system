@@ -93,7 +93,7 @@ func GetReferralDigest(rpl utils.APIReferPayload) ([32]byte, error) {
 	return digestBytes32, nil
 }
 
-func GetReferralTypedData(rpl utils.APIReferPayload) ([]byte, error) {
+func GetReferralTypedDataHash(rpl utils.APIReferPayload) ([]byte, error) {
 	// Hash the unsigned message using EIP-715
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
@@ -193,7 +193,7 @@ func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address,
 // RecoverReferralSigAddr recovers the address of a signed APIReferPayload
 // which is sent when an agency/broker wants to pass on their referral
 func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
-	typedDataHash, err := GetReferralTypedData(rpl)
+	typedDataHash, err := GetReferralTypedDataHash(rpl)
 	if err != nil {
 		return common.Address{}, err
 	}

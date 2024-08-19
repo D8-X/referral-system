@@ -43,7 +43,7 @@ func TestGetCodeSelectionTypedData(t *testing.T) {
 	}
 }
 
-func TestRecoverCodeSelectSigAddr(t *testing.T) {
+func TestRecoverCodeSelectSigAddr1(t *testing.T) {
 
 	var rc = utils.APICodeSelectionPayload{
 		Code:       "ABCD",
@@ -58,6 +58,25 @@ func TestRecoverCodeSelectSigAddr(t *testing.T) {
 	}
 	if addr.String() != "0x0aB6527027EcFF1144dEc3d78154fce309ac838c" {
 		t.Errorf("failed: wrong address recovered")
+	}
+	fmt.Println(addr.String())
+}
+
+func TestRecoverCodeSelectSigAddr2(t *testing.T) {
+
+	var rc = utils.APICodeSelectionPayload{
+		Code:       "DOUBLE_AG",
+		TraderAddr: "0x337A3778244159F37C016196a8E1038A811a34C9",
+		CreatedOn:  1724088163,
+		Signature:  "0xfcc543727b2629db226c8fa0da936e35d4bad2594d69371dddfd185a5c63059f3bd8ff3224c7dec69856fb6f14cbc3135019a3df20918fe88a7e9f5964a662ee1b",
+	}
+	addr, err := RecoverCodeSelectSigAddr(rc)
+	if err != nil {
+		t.Errorf("failed:" + err.Error())
+		return
+	}
+	if addr.String() != "0x337A3778244159F37C016196a8E1038A811a34C9" {
+		t.Errorf("failed: wrong address recovered:" + addr.String())
 	}
 	fmt.Println(addr.String())
 }
@@ -100,13 +119,33 @@ func TestNewCodeTypedDataHash(t *testing.T) {
 	}
 }
 
-func TestRecoverAddrNewCode(t *testing.T) {
+func TestRecoverAddrNewCode1(t *testing.T) {
 	var rc = utils.APICodePayload{
 		Code:          "ABCD",
 		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
 		CreatedOn:     1696166434,
 		PassOnPercTDF: 225,
 		Signature:     "0xb11b9af69b85719093be154bd9a9a23792d1ecb64f70b34dd69fdbec6c7cdf7048d62c6a6d94ee9f65e78aafad2ea45d94765e285a18485b879f814fde17c6b01b"}
+	d, err := RecoverCodeSigAddr(rc)
+	if err != nil {
+		t.Errorf("recover failed order: %v", err)
+		return
+	}
+	addr := fmt.Sprintf("%x", d)
+	if addr != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
+		t.Errorf("failed")
+		return
+	}
+}
+
+func TestRecoverAddrNewCode2(t *testing.T) {
+	var rc = utils.APICodePayload{
+		Code:          "ABCD",
+		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     "0xb11b9af69b85719093be154bd9a9a23792d1ecb64f70b34dd69fdbec6c7cdf7048d62c6a6d94ee9f65e78aafad2ea45d94765e285a18485b879f814fde17c6b01b"}
+	// signature is different from case 1 (from typed data)
 	d, err := RecoverCodeSigAddr(rc)
 	if err != nil {
 		t.Errorf("recover failed order: %v", err)

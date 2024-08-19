@@ -25,6 +25,24 @@ func TestGetCodeSelectionDigest(t *testing.T) {
 	}
 }
 
+func TestGetCodeSelectionTypedData(t *testing.T) {
+	var rc = utils.APICodeSelectionPayload{
+		Code:       "ABCD",
+		TraderAddr: "0x337A3778244159F37C016196a8E1038A811a34C9",
+		CreatedOn:  1696166434,
+		Signature:  ""}
+	d, err := GetCodeSelectionTypedDataHash(rc)
+	if err != nil {
+		t.Errorf("typed data failed: %v", err)
+		return
+	}
+	hashHex := fmt.Sprintf("%x", d)
+	if hashHex != "bb91571eb64e6a1ab52d60f6a1c9918c9335ee0a614489c6b9b690e183a9a91c" {
+		t.Errorf("failed, hash:" + hashHex)
+		return
+	}
+}
+
 func TestRecoverCodeSelectSigAddr(t *testing.T) {
 
 	var rc = utils.APICodeSelectionPayload{
@@ -62,6 +80,26 @@ func TestNewCodeDigest(t *testing.T) {
 		return
 	}
 }
+
+func TestNewCodeTypedDataHash(t *testing.T) {
+	var rc = utils.APICodePayload{
+		Code:          "ABCD",
+		ReferrerAddr:  "0x337A3778244159F37C016196a8E1038A811a34C9",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 333,
+		Signature:     ""}
+	d, err := GetCodeTypedDataHash(rc)
+	if err != nil {
+		t.Errorf("digest failed order: %v", err)
+		return
+	}
+	digestHex := fmt.Sprintf("%x", d)
+	if digestHex != "f97ad4e2794c669374c95e1374eec3eb47f3eeaea204b5d4e4038febdb065f20" {
+		t.Errorf("failed: received:" + digestHex)
+		return
+	}
+}
+
 func TestRecoverAddrNewCode(t *testing.T) {
 	var rc = utils.APICodePayload{
 		Code:          "ABCD",

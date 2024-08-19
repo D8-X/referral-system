@@ -33,11 +33,11 @@ func GetCodeSelectionDigest(rc utils.APICodeSelectionPayload) ([32]byte, error) 
 	return digestBytes32, nil
 }
 
-func GetCodeSelectionTypedData(ps utils.APICodeSelectionPayload) ([]byte, error) {
+func GetCodeSelectionTypedDataHash(ps utils.APICodeSelectionPayload) ([]byte, error) {
 	// Hash the unsigned message using EIP-715
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
-			"CodeSelect": []apitypes.Type{
+			"CodeSelection": []apitypes.Type{
 				{Name: "Code", Type: "string"},
 				{Name: "TraderAddr", Type: "address"},
 				{Name: "CreatedOn", Type: "uint256"},
@@ -46,7 +46,7 @@ func GetCodeSelectionTypedData(ps utils.APICodeSelectionPayload) ([]byte, error)
 				{Name: "name", Type: "string"},
 			},
 		},
-		PrimaryType: "CodeSelect",
+		PrimaryType: "CodeSelection",
 		Domain: apitypes.TypedDataDomain{
 			Name: "Referral System",
 		},
@@ -56,7 +56,7 @@ func GetCodeSelectionTypedData(ps utils.APICodeSelectionPayload) ([]byte, error)
 			"CreatedOn":  big.NewInt(int64(ps.CreatedOn)),
 		},
 	}
-	return typedData.HashStruct("CodeSelect", typedData.Message)
+	return typedData.HashStruct("CodeSelection", typedData.Message)
 }
 
 func isValidEvmAddr(addr string) bool {
@@ -136,7 +136,7 @@ func GetCodeDigest(rpl utils.APICodePayload) ([32]byte, error) {
 	return digestBytes32, nil
 }
 
-func GetCodeTypedData(cp utils.APICodePayload) ([]byte, error) {
+func GetCodeTypedDataHash(cp utils.APICodePayload) ([]byte, error) {
 	// Hash the unsigned message using EIP-715
 	typedData := apitypes.TypedData{
 		Types: apitypes.Types{
@@ -167,7 +167,7 @@ func GetCodeTypedData(cp utils.APICodePayload) ([]byte, error) {
 // RecoverCodeSelectSigAddr recovers the address of a signed APICodeSelectionPayload
 // which is sent when a trader selects their code
 func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address, error) {
-	typedDataHash, err := GetCodeSelectionTypedData(ps)
+	typedDataHash, err := GetCodeSelectionTypedDataHash(ps)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -219,7 +219,7 @@ func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
 // RecoverCodeSigAddr recovers the address of a signed APICodePayload
 // which is sent when a referrer creates their code
 func RecoverCodeSigAddr(cp utils.APICodePayload) (common.Address, error) {
-	typedDataHash, err := GetCodeTypedData(cp)
+	typedDataHash, err := GetCodeTypedDataHash(cp)
 	if err != nil {
 		return common.Address{}, err
 	}

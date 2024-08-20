@@ -25,7 +25,7 @@ func TestGetCodeSelectionDigest(t *testing.T) {
 	}
 }
 
-func TestGetCodeSelectionTypedData(t *testing.T) {
+func TestGetCodeSelectionTypedDataHash(t *testing.T) {
 	var rc = utils.APICodeSelectionPayload{
 		Code:       "ABCD",
 		TraderAddr: "0x337A3778244159F37C016196a8E1038A811a34C9",
@@ -158,7 +158,26 @@ func TestRecoverAddrNewCode2(t *testing.T) {
 	}
 }
 
-func TestRecoverReferralAddr(t *testing.T) {
+func TestGetReferralTypedDataHash(t *testing.T) {
+	var rc = utils.APIReferPayload{
+		ParentAddr:    "0x337A3778244159F37C016196a8E1038A811a34C9",
+		ReferToAddr:   "0x863ad9ce46acf07fd9390147b619893461036194",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     "0xb52d4433677023c57eb2a56ca70cde2498154c88cd295451628298b71599032f408b4776911e977dea5122b82dce1e2615dc48fb360f5386b8d20fede2acf7d01b"}
+	d, err := GetReferralTypedDataHash(rc)
+	if err != nil {
+		t.Errorf("digest failed order: %v", err)
+		return
+	}
+	digestHex := fmt.Sprintf("%x", d)
+	if digestHex != "b37f4cc03960b29db2240f8540372a4df8b76eb19d37da7379725c301d7a4d69" {
+		t.Errorf("failed: received:" + digestHex)
+		return
+	}
+}
+
+func TestRecoverReferralAddr1(t *testing.T) {
 	var rc = utils.APIReferPayload{
 		ParentAddr:    "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
 		ReferToAddr:   "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
@@ -173,6 +192,25 @@ func TestRecoverReferralAddr(t *testing.T) {
 	addrHex := fmt.Sprintf("%x", d)
 	if addrHex != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
 		t.Errorf("failed")
+		return
+	}
+}
+
+func TestRecoverReferralAddr2(t *testing.T) {
+	var rc = utils.APIReferPayload{
+		ParentAddr:    "0x337A3778244159F37C016196a8E1038A811a34C9",
+		ReferToAddr:   "0x863ad9ce46acf07fd9390147b619893461036194",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     "0xb52d4433677023c57eb2a56ca70cde2498154c88cd295451628298b71599032f408b4776911e977dea5122b82dce1e2615dc48fb360f5386b8d20fede2acf7d01b"}
+	d, err := RecoverReferralSigAddr(rc)
+	if err != nil {
+		t.Errorf("recover failed order: %v", err)
+		return
+	}
+	addrHex := fmt.Sprintf("%x", d)
+	if "0x"+addrHex != strings.ToLower(rc.ParentAddr) {
+		t.Errorf("failed:" + addrHex)
 		return
 	}
 }

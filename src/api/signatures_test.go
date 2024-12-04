@@ -25,7 +25,25 @@ func TestGetCodeSelectionDigest(t *testing.T) {
 	}
 }
 
-func TestRecoverCodeSelectSigAddr(t *testing.T) {
+func TestGetCodeSelectionTypedDataHash(t *testing.T) {
+	var rc = utils.APICodeSelectionPayload{
+		Code:       "ABCD",
+		TraderAddr: "0x337A3778244159F37C016196a8E1038A811a34C9",
+		CreatedOn:  1696166434,
+		Signature:  ""}
+	d, err := GetCodeSelectionTypedDataHash(rc)
+	if err != nil {
+		t.Errorf("typed data failed: %v", err)
+		return
+	}
+	hashHex := fmt.Sprintf("%x", d)
+	if hashHex != "bb91571eb64e6a1ab52d60f6a1c9918c9335ee0a614489c6b9b690e183a9a91c" {
+		t.Errorf("failed, hash:" + hashHex)
+		return
+	}
+}
+
+func TestRecoverCodeSelectSigAddr1(t *testing.T) {
 
 	var rc = utils.APICodeSelectionPayload{
 		Code:       "ABCD",
@@ -40,6 +58,25 @@ func TestRecoverCodeSelectSigAddr(t *testing.T) {
 	}
 	if addr.String() != "0x0aB6527027EcFF1144dEc3d78154fce309ac838c" {
 		t.Errorf("failed: wrong address recovered")
+	}
+	fmt.Println(addr.String())
+}
+
+func TestRecoverCodeSelectSigAddr2(t *testing.T) {
+
+	var rc = utils.APICodeSelectionPayload{
+		Code:       "DOUBLE_AG",
+		TraderAddr: "0x337A3778244159F37C016196a8E1038A811a34C9",
+		CreatedOn:  1724088163,
+		Signature:  "0xfcc543727b2629db226c8fa0da936e35d4bad2594d69371dddfd185a5c63059f3bd8ff3224c7dec69856fb6f14cbc3135019a3df20918fe88a7e9f5964a662ee1b",
+	}
+	addr, err := RecoverCodeSelectSigAddr(rc)
+	if err != nil {
+		t.Errorf("failed:" + err.Error())
+		return
+	}
+	if addr.String() != "0x337A3778244159F37C016196a8E1038A811a34C9" {
+		t.Errorf("failed: wrong address recovered:" + addr.String())
 	}
 	fmt.Println(addr.String())
 }
@@ -62,7 +99,27 @@ func TestNewCodeDigest(t *testing.T) {
 		return
 	}
 }
-func TestRecoverAddrNewCode(t *testing.T) {
+
+func TestNewCodeTypedDataHash(t *testing.T) {
+	var rc = utils.APICodePayload{
+		Code:          "ABCD",
+		ReferrerAddr:  "0x337A3778244159F37C016196a8E1038A811a34C9",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 333,
+		Signature:     ""}
+	d, err := GetCodeTypedDataHash(rc)
+	if err != nil {
+		t.Errorf("digest failed order: %v", err)
+		return
+	}
+	digestHex := fmt.Sprintf("%x", d)
+	if digestHex != "f97ad4e2794c669374c95e1374eec3eb47f3eeaea204b5d4e4038febdb065f20" {
+		t.Errorf("failed: received:" + digestHex)
+		return
+	}
+}
+
+func TestRecoverAddrNewCode1(t *testing.T) {
 	var rc = utils.APICodePayload{
 		Code:          "ABCD",
 		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
@@ -81,7 +138,46 @@ func TestRecoverAddrNewCode(t *testing.T) {
 	}
 }
 
-func TestRecoverReferralAddr(t *testing.T) {
+func TestRecoverAddrNewCode2(t *testing.T) {
+	var rc = utils.APICodePayload{
+		Code:          "ABCD",
+		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     "0xb11b9af69b85719093be154bd9a9a23792d1ecb64f70b34dd69fdbec6c7cdf7048d62c6a6d94ee9f65e78aafad2ea45d94765e285a18485b879f814fde17c6b01b"}
+	// signature is different from case 1 (from typed data)
+	d, err := RecoverCodeSigAddr(rc)
+	if err != nil {
+		t.Errorf("recover failed order: %v", err)
+		return
+	}
+	addr := fmt.Sprintf("%x", d)
+	if addr != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
+		t.Errorf("failed")
+		return
+	}
+}
+
+func TestGetReferralTypedDataHash(t *testing.T) {
+	var rc = utils.APIReferPayload{
+		ParentAddr:    "0x337A3778244159F37C016196a8E1038A811a34C9",
+		ReferToAddr:   "0x863ad9ce46acf07fd9390147b619893461036194",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     "0xb52d4433677023c57eb2a56ca70cde2498154c88cd295451628298b71599032f408b4776911e977dea5122b82dce1e2615dc48fb360f5386b8d20fede2acf7d01b"}
+	d, err := GetReferralTypedDataHash(rc)
+	if err != nil {
+		t.Errorf("digest failed order: %v", err)
+		return
+	}
+	digestHex := fmt.Sprintf("%x", d)
+	if digestHex != "b37f4cc03960b29db2240f8540372a4df8b76eb19d37da7379725c301d7a4d69" {
+		t.Errorf("failed: received:" + digestHex)
+		return
+	}
+}
+
+func TestRecoverReferralAddr1(t *testing.T) {
 	var rc = utils.APIReferPayload{
 		ParentAddr:    "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
 		ReferToAddr:   "0x9d5aaB428e98678d0E645ea4AeBd25f744341a05",
@@ -96,6 +192,25 @@ func TestRecoverReferralAddr(t *testing.T) {
 	addrHex := fmt.Sprintf("%x", d)
 	if addrHex != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
 		t.Errorf("failed")
+		return
+	}
+}
+
+func TestRecoverReferralAddr2(t *testing.T) {
+	var rc = utils.APIReferPayload{
+		ParentAddr:    "0x337A3778244159F37C016196a8E1038A811a34C9",
+		ReferToAddr:   "0x863ad9ce46acf07fd9390147b619893461036194",
+		CreatedOn:     1696166434,
+		PassOnPercTDF: 225,
+		Signature:     "0xb52d4433677023c57eb2a56ca70cde2498154c88cd295451628298b71599032f408b4776911e977dea5122b82dce1e2615dc48fb360f5386b8d20fede2acf7d01b"}
+	d, err := RecoverReferralSigAddr(rc)
+	if err != nil {
+		t.Errorf("recover failed order: %v", err)
+		return
+	}
+	addrHex := fmt.Sprintf("%x", d)
+	if "0x"+addrHex != strings.ToLower(rc.ParentAddr) {
+		t.Errorf("failed:" + addrHex)
 		return
 	}
 }

@@ -120,20 +120,21 @@ func TestNewCodeTypedDataHash(t *testing.T) {
 }
 
 func TestRecoverAddrNewCode1(t *testing.T) {
+	// payload below was signed using eip-712
 	var rc = utils.APICodePayload{
-		Code:          "ABCD",
-		ReferrerAddr:  "0x0aB6527027EcFF1144dEc3d78154fce309ac838c",
-		CreatedOn:     1696166434,
-		PassOnPercTDF: 225,
-		Signature:     "0xb11b9af69b85719093be154bd9a9a23792d1ecb64f70b34dd69fdbec6c7cdf7048d62c6a6d94ee9f65e78aafad2ea45d94765e285a18485b879f814fde17c6b01b"}
+		Code:          "MYTEST4",
+		ReferrerAddr:  "0xA131CF69D5456142E96A92583E11bb7c123eaa26",
+		CreatedOn:     1736784636,
+		PassOnPercTDF: 2500,
+		Signature:     "0x16de8b9b53b3475086733c558acce4add7776220a3fa01138e8109c513b1588d310cc77d1aae1f8f58b85a27eb2cf81a7da9360de60b3c48a4cedee861a304f01b"}
 	d, err := RecoverCodeSigAddr(rc)
 	if err != nil {
 		t.Errorf("recover failed order: %v", err)
 		return
 	}
-	addr := fmt.Sprintf("%x", d)
-	if addr != strings.ToLower("0aB6527027EcFF1144dEc3d78154fce309ac838c") {
-		t.Errorf("failed")
+	// address.String() is capitalization normalized (checksum encoded)
+	if d.String() != "0xA131CF69D5456142E96A92583E11bb7c123eaa26" {
+		t.Errorf("failed: %v", d.String())
 		return
 	}
 }

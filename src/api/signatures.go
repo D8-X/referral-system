@@ -174,7 +174,7 @@ func RecoverCodeSelectSigAddr(ps utils.APICodeSelectionPayload) (common.Address,
 	// try to recover
 	addr, err := recoverEvmAddressEip712(string(typedDataHash), ps.Signature)
 
-	if err == nil && addr.String() == ps.TraderAddr {
+	if err == nil && strings.ToLower(addr.String()) == strings.ToLower(ps.TraderAddr) {
 		return addr, err
 	}
 
@@ -200,7 +200,7 @@ func RecoverReferralSigAddr(rpl utils.APIReferPayload) (common.Address, error) {
 	// try to recover
 	addr, err := recoverEvmAddressEip712(string(typedDataHash), rpl.Signature)
 
-	if err == nil && addr.String() == rpl.ParentAddr {
+	if err == nil && strings.ToLower(addr.String()) == strings.ToLower(rpl.ParentAddr) {
 		return addr, err
 	}
 
@@ -226,7 +226,7 @@ func RecoverCodeSigAddr(cp utils.APICodePayload) (common.Address, error) {
 	// try to recover
 	addr, err := recoverEvmAddressEip712(string(typedDataHash), cp.Signature)
 
-	if err == nil && addr.String() == cp.ReferrerAddr {
+	if err == nil && strings.ToLower(addr.String()) == strings.ToLower(cp.ReferrerAddr) {
 		return addr, err
 	}
 
@@ -249,18 +249,6 @@ func bytesFromHexString(hexNumber string) ([]byte, error) {
 	}
 	return data, nil
 }
-
-// func recoverEvmAddress(data string, signature string) (common.Address, error) {
-// 	addr, err := recoverEvmAddressEip712(data, signature)
-// 	if err == nil {
-// 		return addr, nil
-// 	}
-// 	addr, err = recoverEvmAddressEip191(data, signature)
-// 	if err != nil {
-// 		return common.Address{}, err
-// 	}
-// 	return addr, nil
-// }
 
 func recoverEvmAddressEip191(data string, signature string) (common.Address, error) {
 	// Hash the unsigned message using EIP-191

@@ -1,33 +1,14 @@
 [
   {
-    "chainId": 80001,
-    "HTTP": [
-      "https://rpc-mumbai.maticvigil.com",
-      "https://polygon-mumbai-bor.publicnode.com"
-    ]
-  },
-  {
     "chainId": 1101,
     "HTTP": ["https://zkevm-rpc.com"]
   },
   {
-    "chainId": 196,
-    "HTTP": ["https://xlayerrpc.okx.com"]
-  },
-  {
-    "chainId": 195,
-    "HTTP": ["https://endpoints.omniatech.io/v1/xlayer/testnet/public","https://testrpc.xlayer.tech", "https://xlayertestrpc.okx.com"]
-  },
-  {
-    "chainId": 421614,
-    "HTTP": ["https://sepolia-rollup.arbitrum.io/rpc"]
-  },
-  {
-    "chainId": 80084,
-    "HTTP": ["https://bartio.rpc.berachain.com"]
-  },
-  {
     "chainId": 42161,
     "HTTP": ["https://1rpc.io/arb", "https://arb-pokt.nodies.app"]
+  },
+  {
+    "chainId": 80094,
+    "HTTP": ["https://berachain-rpc.publicnode.com", "https://rpc.berachain.com"]
   }
 ]

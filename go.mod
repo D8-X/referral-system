@@ -3,7 +3,7 @@ module referral-system
 go 1.23.7
 
 require (
-	github.com/D8-X/d8x-futures-go-sdk v1.1.2
+	github.com/D8-X/d8x-futures-go-sdk v1.2.5
 	github.com/adhocore/gronx v1.6.6
 	github.com/ethereum/go-ethereum v1.15.5
 	github.com/go-chi/chi/v5 v5.0.10
